@@ -1,15 +1,18 @@
 ﻿using ProtoBuf;
+using Sandbox.Game.EntityComponents;
+using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using VRage.Game.ModAPI;
+using VRage.ModAPI;
 using VRageMath;
+using WelderWall.Data.Scripts.Math0424.WelderWall.Util;
 
 namespace WelderWall.Data.Scripts.Math0424.WelderWall
 {
     enum WelderState
     {
-        None,
         Grind,
         Weld,
     }
@@ -22,27 +25,148 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         [ProtoMember(3)] public Vector3I? TL;
         [ProtoMember(4)] public Vector3I? BR;
         [ProtoMember(5)] public Vector3I? BL;
-        [ProtoMember(6)] public WelderState State;
-        [ProtoMember(7)] public double PowerInput;
-        [ProtoMember(8)] public bool DisplayBox;
-        [ProtoMember(9)] public bool IsConnected;
 
-        public long Owner;
+        [ProtoMember(7)] public WelderState State;
+        [ProtoMember(8)] public float PowerInput;
+        [ProtoMember(9)] public bool Enabled;
+
+        [ProtoMember(10)] public long Owner;
+        [ProtoMember(11)] public bool IsWorking;
+
         public IMyInventory Inventory;
-        public List<IMySlimBlock> Welds;
+        public List<IMySlimBlock> Blocks;
+        private IMyCubeBlock[] Corners;
+
+        public void UpdateTerminalControls()
+        {
+            foreach(var block in Corners)
+                if (block != null)
+                    WelderManager.TerminalControls.SetValues(block.EntityId, Enabled, State == WelderState.Weld, PowerInput);
+        }
+
+        public void UpdatePowerState()
+        {
+            foreach(var block in Corners)
+                if (block != null)
+                {
+                    block.ResourceSink.SetRequiredInputByType(MyResourceDistributorComponent.ElectricityId, PowerInput / 4);
+                }
+        }
 
         public WelderWall()
         {
-            State = WelderState.Weld;
-            Welds = new List<IMySlimBlock>();
+            State = WelderState.Grind;
+            Blocks = new List<IMySlimBlock>();
+            Corners = new IMyCubeBlock[4];
         }
 
-        public override bool Equals(object obj)
+        public void ColdInit(IMyCubeGrid grid)
         {
-            if (obj is WelderWall)
-                return ID == ((WelderWall)obj).ID;
-            return false;
+            if (BL.HasValue)
+            {
+                var cube = grid.GetCubeBlock(BL.Value)?.FatBlock;
+                if (cube != null)
+                    Inventory = cube.GetInventory();
+                Set(0, cube);
+            }
+            if (BR.HasValue)
+                Set(1, grid.GetCubeBlock(BR.Value)?.FatBlock);
+            if (TR.HasValue)
+                Set(2, grid.GetCubeBlock(TR.Value)?.FatBlock);
+            if (TL.HasValue)
+                Set(3, grid.GetCubeBlock(TL.Value)?.FatBlock);
+
+            UpdateTerminalControls();
+            UpdatePowerState();
         }
+
+        public void Set(int i, IMyCubeBlock corner)
+        {
+            if (corner == null)
+            {
+                IsWorking = false;
+                return;
+            }
+
+            Corners[i % 4] = corner;
+            switch(i % 4) 
+            {
+                case 0:
+                    BL = corner.Position;
+                    break;
+                case 1:
+                    BR = corner.Position;
+                    break;
+                case 2:
+                    TR = corner.Position;
+                    break;
+                case 3:
+                    TL = corner.Position;
+                    break;
+            }
+            CalculateID();
+
+            corner.IsWorkingChanged += CheckDisabled;
+            corner.OnClose += RemoveCorner;
+            if (!corner.IsWorking)
+                IsWorking = false;
+        }
+
+        private void CheckDisabled(IMyCubeBlock corner)
+        {
+            if (!corner.IsWorking)
+                IsWorking = false;
+        }
+
+        public void UpdateIsWorking()
+        {
+            IsWorking = true;
+            foreach(var block in Corners)
+            {
+                if (block == null || !block.IsWorking)
+                {
+                    IsWorking = false;
+                    return;
+                }
+            }
+        }
+
+        private void RemoveCorner(IMyEntity ent)
+        {
+            var block = ent as IMyCubeBlock;
+            if (block == null)
+                return;
+            IsWorking = false;
+            block.IsWorkingChanged -= CheckDisabled;
+            block.OnClose -= RemoveCorner;
+
+            var pos = block.Position;
+            if (BL.HasValue && BL.Value == pos)
+            {
+                BL = null;
+                Corners[0] = null;
+            }
+            if (BR.HasValue && BR.Value == pos)
+            {
+                BR = null;
+                Corners[1] = null;
+            }
+            if (TR.HasValue && TR.Value == pos)
+            {
+                TR = null;
+                Corners[2] = null;
+            }
+            if (TL.HasValue && TL.Value == pos)
+            {
+                TL = null;
+                Corners[3] = null;
+            }
+            CalculateID();
+        }
+
+
+
+
 
         public bool ContainsCorner(Vector3I pos)
         {
@@ -55,6 +179,43 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             if (TR.HasValue && TR.Value == pos)
                 return true;
             return false;
+        }
+
+        private bool IsBetweenPoints(Vector3I a, Vector3I b, Vector3I c)
+        {
+            bool isAxisAligned = (a.X == b.X && a.Y == b.Y) ||
+                                 (a.X == b.X && a.Z == b.Z) ||
+                                 (a.Y == b.Y && a.Z == b.Z);
+            if (!isAxisAligned)
+                return false;
+
+            bool withinX = c.X >= Math.Min(a.X, b.X) && c.X <= Math.Max(a.X, b.X);
+            bool withinY = c.Y >= Math.Min(a.Y, b.Y) && c.Y <= Math.Max(a.Y, b.Y);
+            bool withinZ = c.Z >= Math.Min(a.Z, b.Z) && c.Z <= Math.Max(a.Z, b.Z);
+
+            return ((a.X == b.X && a.X == c.X && withinY && withinZ) ||
+                    (a.Y == b.Y && a.Y == c.Y && withinX && withinZ) ||
+                    (a.Z == b.Z && a.Z == c.Z && withinX && withinY));
+        }
+
+        public bool HasOneValidCorner()
+        {
+            return BL.HasValue || TL.HasValue || BR.HasValue || TR.HasValue;
+        }
+
+        public bool HasAllCorners()
+        {
+            return BL.HasValue && TL.HasValue && BR.HasValue && TR.HasValue;
+        }
+
+        public bool CanFunction()
+        {
+            return IsWorking && HasAllCorners();
+        }
+
+        public bool IsFunctional()
+        {
+            return CanFunction() && Enabled;
         }
 
         public bool Contains(Vector3I pos)
@@ -80,66 +241,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             return false;
         }
 
-        private bool IsBetweenPoints(Vector3I a, Vector3I b, Vector3I c)
-        {
-            bool isAxisAligned = (a.X == b.X && a.Y == b.Y) ||
-                                 (a.X == b.X && a.Z == b.Z) ||
-                                 (a.Y == b.Y && a.Z == b.Z);
-            if (!isAxisAligned)
-                return false;
-
-            bool withinX = c.X >= Math.Min(a.X, b.X) && c.X <= Math.Max(a.X, b.X);
-            bool withinY = c.Y >= Math.Min(a.Y, b.Y) && c.Y <= Math.Max(a.Y, b.Y);
-            bool withinZ = c.Z >= Math.Min(a.Z, b.Z) && c.Z <= Math.Max(a.Z, b.Z);
-
-            return ((a.X == b.X && a.X == c.X && withinY && withinZ) ||
-                    (a.Y == b.Y && a.Y == c.Y && withinX && withinZ) ||
-                    (a.Z == b.Z && a.Z == c.Z && withinX && withinY));
-        }
-
-        public void Set(int i, Vector3I pos)
-        {
-            switch(i % 4) 
-            {
-                case 0:
-                    BL = pos;
-                    break;
-                case 1:
-                    BR = pos;
-                    break;
-                case 2:
-                    TR = pos;
-                    break;
-                case 3:
-                    TL = pos;
-                    break;
-            }
-            CalculateID();
-        }
-
-        public void Remove(Vector3I pos)
-        {
-            if (TR.HasValue && TR.Value == pos)
-                TR = null;
-            if (TL.HasValue && TL.Value == pos)
-                TL = null;
-            if (BR.HasValue && BR.Value == pos)
-                BR = null;
-            if (BL.HasValue && BL.Value == pos)
-                BL = null;
-            CalculateID();
-        }
-
-        public bool AllCornersValid()
-        {
-            return BL.HasValue && TL.HasValue && BR.HasValue && TR.HasValue;
-        }
-
-        public bool IsValid()
-        {
-            return IsConnected && AllCornersValid();
-        }
-        
         public void CalculateID()
         {
             ID = 17;
@@ -147,6 +248,13 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             ID = ID * 31 + TL.GetHashCode();
             ID = ID * 31 + BR.GetHashCode();
             ID = ID * 31 + BL.GetHashCode();
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is WelderWall)
+                return ID == ((WelderWall)obj).ID;
+            return false;
         }
 
         public override int GetHashCode()

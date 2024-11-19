@@ -9,6 +9,7 @@ using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
+using VRageMath;
 using WelderWall.Data.Scripts.Math0424.WelderWall.Util;
 
 namespace WelderWall.Data.Scripts.Math0424.WelderWall
@@ -29,12 +30,13 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         public static MyStringHash WelderPole = MyStringHash.Get("WelderWallPole");
         public static MyStringHash WelderDamage = MyStringHash.Get("Welder");
         public static EasyConfiguration Config;
+        public static EasyTerminalControls<IMyCargoContainer> TerminalControls;
 
-        private List<WelderGrid> WelderGrids;
+        private Dictionary<long, WelderGrid> WelderGrids;
 
         private Dictionary<Enum, object> defaultConfig = new Dictionary<Enum, object>()
         {
-            { ConfigOptions.MaxPower, 100000 },
+            { ConfigOptions.MaxPower, 100000f },
             { ConfigOptions.MaxWeldSpeed, 6 },
             { ConfigOptions.MaxWallSize, 50 },
             { ConfigOptions.MaxWeldsPerTick, 10 },
@@ -42,16 +44,63 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         public WelderManager()
         {
-            WelderGrids = new List<WelderGrid>();
+            WelderGrids = new Dictionary<long, WelderGrid>();
         }
 
         public override void BeforeStart()
         {
             EasyNetworker.Init(22345);
             Config = new EasyConfiguration(false, "WelderWallConfig.cfg", defaultConfig);
+
+            TerminalControls = new EasyTerminalControls<IMyCargoContainer>("WelderWallMod", WelderCorner)
+                .WithSeperator()
+                .WithOnOff("Powered", "Enabled", "On", "Off", Terminal_UpdateEnabled)
+                .WithOnOff("Action", "Weld or Grind", "Weld", "Grind", Terminal_UpdateWeldGrind)
+                .WithSlider("Power Input", "{value}kw", "Max Power Draw", 0, Config.GetFloat(ConfigOptions.MaxPower), Terminal_UpdatePower)
+                .WithSeperator();
+
             MyAPIGateway.Entities.OnEntityAdd += EntityAdd;
             foreach (var ent in MyEntities.GetEntities())
                 EntityAdd(ent);
+        }
+
+        private void Terminal_UpdateEnabled(IMyCargoContainer container, bool value)
+        {
+            if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
+            {
+                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWall(container);
+                if (wall != null)
+                {
+                    wall.Enabled = value;
+                    wall.UpdateTerminalControls();
+                }
+            }
+        }
+
+        private void Terminal_UpdateWeldGrind(IMyCargoContainer container, bool value)
+        {
+            if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
+            {
+                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWall(container);
+                if (wall != null)
+                {
+                    wall.State = value ? WelderState.Weld : WelderState.Grind;
+                    wall.UpdateTerminalControls();
+                }
+            }
+        }
+
+        private void Terminal_UpdatePower(IMyCargoContainer container, float value)
+        {
+            if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
+            {
+                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWall(container);
+                if (wall != null)
+                {
+                    wall.PowerInput = value;
+                    wall.UpdateTerminalControls();
+                }
+            }
         }
 
         private void EntityAdd(IMyEntity ent)
@@ -63,13 +112,13 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 return;
 
             var welderGrid = new WelderGrid(grid);
-            welderGrid.Closed += e => WelderGrids.Remove(e);
-            WelderGrids.Add(welderGrid);
+            welderGrid.Closed += e => WelderGrids.Remove(grid.EntityId);
+            WelderGrids.Add(grid.EntityId, welderGrid);
         }
 
         public override void UpdateBeforeSimulation()
         {
-            foreach(var wall in WelderGrids)
+            foreach(var wall in WelderGrids.Values)
             {
                 wall.AssembleBlockList();
                 wall.DispatchBlocks();
@@ -78,13 +127,14 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         public override void Draw()
         {
-            foreach (var wall in WelderGrids)
+            foreach (var wall in WelderGrids.Values)
                 wall.Draw();
         }
 
-        protected override void UnloadData()
+        public override void SaveData()
         {
-
+            foreach(var x in WelderGrids.Values)
+                x.Save();
         }
 
     }

@@ -47,6 +47,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         private static Dictionary<Type, Action<PacketIn>> _registry;
         private static Dictionary<string, Type> _table;
 
+        public static bool Initalized => _commsId != 0;
+
         public static void Init(ushort commsId)
         {
             _commsId = commsId;
