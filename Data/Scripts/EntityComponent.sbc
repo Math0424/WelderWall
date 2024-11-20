@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+	<EntityComponents>
+
+		<EntityComponent xsi:type="MyObjectBuilder_ModStorageComponentDefinition">
+			<Id>
+				<TypeId>ModStorageComponent</TypeId>
+				<SubtypeId>WelderModStorage</SubtypeId>
+			</Id>
+			<RegisteredStorageGuids>
+				<guid>28ff30bb-768a-4b21-b917-86a88050a844</guid>
+			</RegisteredStorageGuids>
+		</EntityComponent>
+
+	</EntityComponents>
+
+</Definitions>

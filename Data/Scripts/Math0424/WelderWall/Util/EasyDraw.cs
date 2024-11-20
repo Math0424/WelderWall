@@ -22,10 +22,10 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             MySimpleObjectDraw.DrawTransparentBox(ref wm, ref box, ref color, raster, 1, thickness, SQUARE, SQUARE);
         }
 
-        public static void DrawLine(Vector3D pos, Vector3D dir, Color color)
+        public static void DrawLine(Vector3D pos, Vector3D dir, float length, Color color, float thickness = 0.01f)
         {
             Vector4 vColor = color;
-            MySimpleObjectDraw.DrawLine(pos, pos + dir * 10, SQUARE, ref vColor, 0.01f);
+            MySimpleObjectDraw.DrawLine(pos, pos + (dir * length), SQUARE, ref vColor, thickness);
         }
 
         public static void DrawSphere(Vector3D center, float size, Color color, MySimpleObjectRasterizer raster = MySimpleObjectRasterizer.Wireframe, float thickness = 0.01f)

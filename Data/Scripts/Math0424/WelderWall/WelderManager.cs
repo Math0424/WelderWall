@@ -3,43 +3,46 @@ using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using Voidfront;
-using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
-using VRage.ModAPI;
 using VRage.Utils;
-using VRageMath;
 using WelderWall.Data.Scripts.Math0424.WelderWall.Util;
 
 namespace WelderWall.Data.Scripts.Math0424.WelderWall
 {
     public enum ConfigOptions
     {
+        Speed,
         MaxPower,
-        MaxWeldSpeed,
         MaxWallSize,
-        MaxWeldsPerTick,
+        MaxActionsPerTick,
     }
 
+    /// <summary>
+    /// Highest overview of our class structure, manages how much time each grid can consume
+    /// </summary>
     [MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
     internal class WelderManager : MySessionComponentBase
     {
+        public const string WelderCornerName = "WelderWallCorner";
+        public const string WelderPoleName = "WelderWallPole";
+
+
         public static Guid StorageGUID = Guid.Parse("28ff30bb-768a-4b21-b917-86a88050a844");
-        public static MyStringHash WelderCorner = MyStringHash.Get("WelderWallCorner");
-        public static MyStringHash WelderPole = MyStringHash.Get("WelderWallPole");
+        public static MyStringHash WelderCorner = MyStringHash.Get(WelderCornerName);
+        public static MyStringHash WelderPole = MyStringHash.Get(WelderPoleName);
         public static MyStringHash WelderDamage = MyStringHash.Get("Welder");
         public static EasyConfiguration Config;
         public static EasyTerminalControls<IMyCargoContainer> TerminalControls;
 
-        private Dictionary<long, WelderGrid> WelderGrids;
+        private static Dictionary<long, WelderGrid> WelderGrids;
 
         private Dictionary<Enum, object> defaultConfig = new Dictionary<Enum, object>()
         {
-            { ConfigOptions.MaxPower, 100000f },
-            { ConfigOptions.MaxWeldSpeed, 6 },
+            { ConfigOptions.Speed, 0.25f },
+            { ConfigOptions.MaxPower, 1000000f },
             { ConfigOptions.MaxWallSize, 50 },
-            { ConfigOptions.MaxWeldsPerTick, 10 },
+            { ConfigOptions.MaxActionsPerTick, 100 },
         };
 
         public WelderManager()
@@ -56,12 +59,37 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 .WithSeperator()
                 .WithOnOff("Powered", "Enabled", "On", "Off", Terminal_UpdateEnabled)
                 .WithOnOff("Action", "Weld or Grind", "Weld", "Grind", Terminal_UpdateWeldGrind)
-                .WithSlider("Power Input", "{value}kw", "Max Power Draw", 0, Config.GetFloat(ConfigOptions.MaxPower), Terminal_UpdatePower)
+                .WithSlider("Power Input", SliderFormat, "Max Power Draw", 0, Config.GetFloat(ConfigOptions.MaxPower), Terminal_UpdatePower)
                 .WithSeperator();
+        }
 
-            MyAPIGateway.Entities.OnEntityAdd += EntityAdd;
-            foreach (var ent in MyEntities.GetEntities())
-                EntityAdd(ent);
+        private void SliderFormat(IMyTerminalBlock block, float value, StringBuilder sb)
+        {
+            string unit;
+            float adjustedValue;
+
+            if (value >= 1000000000) // Gigawatts
+            {
+                unit = "GW";
+                adjustedValue = value / 1000000000f;
+            }
+            else if (value >= 1000000) // Megawatts
+            {
+                unit = "MW";
+                adjustedValue = value / 1000000f;
+            }
+            else if (value >= 1000) // Kilowatts
+            {
+                unit = "kW";
+                adjustedValue = value / 1000f;
+            }
+            else // Watts
+            {
+                unit = "W";
+                adjustedValue = value;
+            }
+
+            sb.Append($"{Math.Round(adjustedValue, 2)} {unit}");
         }
 
         private void Terminal_UpdateEnabled(IMyCargoContainer container, bool value)
@@ -73,6 +101,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 {
                     wall.Enabled = value;
                     wall.UpdateTerminalControls();
+                    WelderGrids[container.CubeGrid.EntityId].Save();
                 }
             }
         }
@@ -86,6 +115,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 {
                     wall.State = value ? WelderState.Weld : WelderState.Grind;
                     wall.UpdateTerminalControls();
+                    WelderGrids[container.CubeGrid.EntityId].Save();
                 }
             }
         }
@@ -99,30 +129,89 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 {
                     wall.PowerInput = value;
                     wall.UpdateTerminalControls();
+                    WelderGrids[container.CubeGrid.EntityId].Save();
                 }
             }
         }
 
-        private void EntityAdd(IMyEntity ent)
+
+        public static void AddCorner(IMyCubeBlock block)
         {
-            if (!(ent is IMyCubeGrid))
-                return;
-            IMyCubeGrid grid = (IMyCubeGrid)ent;
+            IMyCubeGrid grid = block.CubeGrid;
             if (((MyCubeGrid)grid).IsPreview || !grid.Physics.Enabled)
                 return;
 
-            var welderGrid = new WelderGrid(grid);
-            welderGrid.Closed += e => WelderGrids.Remove(grid.EntityId);
-            WelderGrids.Add(grid.EntityId, welderGrid);
+            if (!WelderGrids.ContainsKey(grid.EntityId))
+            {
+                var tmp = new WelderGrid(grid);
+                WelderGrids.Add(grid.EntityId, tmp);
+                tmp.Closed += e => WelderGrids.Remove(grid.EntityId);
+            }
+
+            WelderGrids[grid.EntityId].AddCorner(block);
         }
 
+        public static void RemoveCorner(IMyCubeBlock block)
+        {
+            IMyCubeGrid grid = block.CubeGrid;
+            if (((MyCubeGrid)grid).IsPreview || !grid.Physics.Enabled)
+                return;
+
+            if (!WelderGrids.ContainsKey(grid.EntityId))
+                return;
+
+            WelderGrids[grid.EntityId].RemoveCorner(block);
+        }
+
+        public static WelderWall GetWelderWall(IMyCubeBlock block)
+        {
+            foreach(var grid in WelderGrids.Values)
+            {
+                var wall = grid.GetWall(block);
+                if (wall != null)
+                    return wall;
+            }
+            return null;
+        }
+
+        bool GoNow = false;
         public override void UpdateBeforeSimulation()
         {
+            if (!MyAPIGateway.Session.IsServer)
+                return;
+
+            // 30 TPS
+            GoNow = !GoNow;
+            if (!GoNow || WelderGrids.Count == 0)
+                return;
+
+            int totalActionCount = 0;
+            List<WelderGrid> active = new List<WelderGrid>();
+            // assemble all blocks
             foreach(var wall in WelderGrids.Values)
             {
                 wall.AssembleBlockList();
-                wall.DispatchBlocks();
+                totalActionCount += wall.ActionsThisTick;
+                if (wall.ActionsThisTick != 0)
+                    active.Add(wall);
             }
+
+            if (totalActionCount == 0)
+                return;
+
+            int razeActions = Math.Max(0, totalActionCount - Config.GetInt(ConfigOptions.MaxActionsPerTick));
+            if (razeActions != 0)
+            {
+                foreach (var grid in active)
+                {
+                    float razePercent = grid.ActionsThisTick / (float)totalActionCount;
+                    grid.RazeActions((int)(razeActions * razePercent));
+                }
+            }
+
+            // preform the actions on the blocks
+            foreach (var wall in active)
+                wall.DispatchBlocks(2);
         }
 
         public override void Draw()
@@ -133,9 +222,10 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         public override void SaveData()
         {
-            foreach(var x in WelderGrids.Values)
-                x.Save();
+            foreach(var wall in WelderGrids.Values)
+                wall.Save();
         }
+
 
     }
 }

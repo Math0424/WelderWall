@@ -6,9 +6,11 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
+using static VRage.Game.MyObjectBuilder_EnvironmentDefinition;
 
 namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 {
@@ -70,17 +72,19 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         }
 
         private static ConcurrentDictionary<long, List<object>> TerminalData = new ConcurrentDictionary<long, List<object>>();
+        private static ConcurrentDictionary<long, bool> TerminalEnabled = new ConcurrentDictionary<long, bool>();
         private static ConcurrentDictionary<string, List<IMyTerminalControl>> TerminalControls = new ConcurrentDictionary<string, List<IMyTerminalControl>>();
         private static Random r = new Random();
 
-        public void SetValues(long blockId, params object[] defaults)
+        //TODO sync this-- somehow..
+        public void SetValues(IMyCubeBlock block, params object[] values)
         {
-            TerminalData[blockId] = defaults.ToList();
+            TerminalData[block.EntityId] = values.ToList();
         }
 
-        public void GetValues(long blockId, out List<object> defaults)
+        public void SetEnabled(IMyCubeBlock block, bool value)
         {
-            defaults = TerminalData[blockId];
+            TerminalEnabled[block.EntityId] = value;
         }
 
         static EasyTerminalControls()
@@ -119,18 +123,18 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 
         private int _terminalCount;
 
-        private string _modName;
+        private string _prefix;
         private string _subtypeId;
 
-        public EasyTerminalControls(string modName, string subtypeId)
+        public EasyTerminalControls(string prefix, string subtypeId)
         {
-            _modName = modName;
+            _prefix = prefix;
             _subtypeId = subtypeId;
         }
 
-        public EasyTerminalControls(string modName, MyStringHash subtypeId)
+        public EasyTerminalControls(string prefix, MyStringHash subtypeId)
         {
-            _modName = modName;
+            _prefix = prefix;
             _subtypeId = subtypeId.String;
             string type = typeof(T).FullName;
             if (!TerminalControls.ContainsKey(type))
@@ -156,6 +160,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         {
             if (b is IMyFunctionalBlock)
                 return ((IMyFunctionalBlock)b).Enabled && ((IMyFunctionalBlock)b).IsWorking;
+            if (TerminalEnabled.ContainsKey(b.EntityId))
+                return TerminalEnabled[b.EntityId];
             return true;
         }
 
@@ -164,10 +170,10 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             TerminalData.Remove(ent.EntityId);
         }
 
-        public EasyTerminalControls<T> WithSlider(string title, string format, string tooltip, float min, float max, Action<T, float> changed = null)
+        public EasyTerminalControls<T> WithSlider(string title, Action<IMyTerminalBlock, float, StringBuilder> builder, string tooltip, float min, float max, Action<T, float> changed = null)
         {
             int terminalId = _terminalCount;
-            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, T>($"{_modName}_slider_{terminalId}");
+            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, T>($"{_prefix}_slider_{terminalId}");
             TerminalControls[typeof(T).FullName].Add(terminal);
 
             terminal.Title = MyStringId.GetOrCompute(title);
@@ -190,7 +196,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 
                 return (float)TerminalData[b.EntityId][terminalId];
             };
-            terminal.Writer = (b, sb) => sb.Append(format.Replace("{value}", Math.Round((float)TerminalData[b.EntityId][terminalId], 2).ToString()));
+            terminal.Writer = (b, sb) => builder?.Invoke(b, (float)TerminalData[b.EntityId][terminalId], sb);
 
             terminal.SetLimits(min, max);
 
@@ -202,7 +208,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         public EasyTerminalControls<T> WithOnOff(string title, string tooltip, string onText = "On", string offText = "Off", Action<T, bool> changed = null)
         {
             int terminalId = _terminalCount;
-            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, T>($"{_modName}_onoff_{terminalId}");
+            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, T>($"{_prefix}_onoff_{terminalId}");
             TerminalControls[typeof(T).FullName].Add(terminal);
 
             terminal.Title = MyStringId.GetOrCompute(title);
@@ -236,7 +242,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         public EasyTerminalControls<T> WithCheckbox(string title, string tooltip, Action<T, bool> changed = null)
         {
             int terminalId = _terminalCount;
-            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, T>($"{_modName}_onoff_{terminalId}");
+            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, T>($"{_prefix}_onoff_{terminalId}");
             TerminalControls[typeof(T).FullName].Add(terminal);
 
             terminal.Title = MyStringId.GetOrCompute(title);
@@ -266,7 +272,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 
         public EasyTerminalControls<T> WithButton(string title, string tooltip, Action<T> clicked = null)
         {
-            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, T>($"{_modName}_onoff_{r.Next()}");
+            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, T>($"{_prefix}_onoff_{r.Next()}");
 
             terminal.Title = MyStringId.GetOrCompute(title);
             terminal.Tooltip = MyStringId.GetOrCompute(tooltip);
@@ -284,7 +290,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         public EasyTerminalControls<T> WithColorPicker(string title, string tooltip, Action<T, Color> changed = null)
         {
             int terminalId = _terminalCount;
-            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, T>($"{_modName}_onoff_{terminalId}");
+            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, T>($"{_prefix}_onoff_{terminalId}");
             TerminalControls[typeof(T).FullName].Add(terminal);
 
             terminal.Title = MyStringId.GetOrCompute(title);
@@ -315,7 +321,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         public EasyTerminalControls<T> WithTextBox(string title, string tooltip, Action<T, string> changed = null)
         {
             int terminalId = _terminalCount;
-            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, T>($"{_modName}_onoff_{terminalId}");
+            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, T>($"{_prefix}_onoff_{terminalId}");
             TerminalControls[typeof(T).FullName].Add(terminal);
 
             terminal.Title = MyStringId.GetOrCompute(title);
@@ -345,7 +351,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 
         public EasyTerminalControls<T> WithLabel(string title)
         {
-            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, T>($"{_modName}_label_{r.Next()}");
+            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, T>($"{_prefix}_label_{r.Next()}");
             terminal.Label = MyStringId.GetOrCompute(title);
             terminal.SupportsMultipleBlocks = true;
             terminal.Visible += IsVisible;
@@ -355,7 +361,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 
         public EasyTerminalControls<T> WithSeperator()
         {
-            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, T>($"{_modName}_seperator_{r.Next()}");
+            var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, T>($"{_prefix}_seperator_{r.Next()}");
             terminal.SupportsMultipleBlocks = true;
             terminal.Visible += IsVisible;
             MyAPIGateway.TerminalControls.AddControl<T>(terminal);
@@ -365,7 +371,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         public void WithAction(string title, string icon = @"Textures\GUI\Icons\Actions\CharacterToggle.dds")
         {
             int terminalId = _terminalCount;
-            var action = MyAPIGateway.TerminalControls.CreateAction<T>($"{_modName}_action_{terminalId}");
+            var action = MyAPIGateway.TerminalControls.CreateAction<T>($"{_prefix}_action_{terminalId}");
             action.Name = new StringBuilder(title);
             action.ValidForGroups = true;
             action.Icon = icon;
