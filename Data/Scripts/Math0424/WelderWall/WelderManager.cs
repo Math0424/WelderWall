@@ -96,7 +96,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         {
             if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
             {
-                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWall(container);
+                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWallByCorner(container);
                 if (wall != null)
                 {
                     wall.Enabled = value;
@@ -110,7 +110,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         {
             if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
             {
-                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWall(container);
+                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWallByCorner(container);
                 if (wall != null)
                 {
                     wall.State = value ? WelderState.Weld : WelderState.Grind;
@@ -124,7 +124,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         {
             if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
             {
-                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWall(container);
+                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWallByCorner(container);
                 if (wall != null)
                 {
                     wall.PowerInput = value;
@@ -160,18 +160,37 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             if (!WelderGrids.ContainsKey(grid.EntityId))
                 return;
 
-            WelderGrids[grid.EntityId].RemoveCorner(block);
+            WelderGrids[grid.EntityId].RemoveWall(block);
         }
 
         public static WelderWall GetWelderWall(IMyCubeBlock block)
         {
-            foreach(var grid in WelderGrids.Values)
-            {
-                var wall = grid.GetWall(block);
-                if (wall != null)
-                    return wall;
-            }
+            if (!WelderGrids.ContainsKey(block.CubeGrid.EntityId))
+                return null;
+
+            var wall = WelderGrids[block.CubeGrid.EntityId].GetWallAny(block);
+            if (wall != null)
+                return wall;
+
             return null;
+        }
+
+        public static void SetWallDisabled(IMyCubeBlock block)
+        {
+            if (!WelderGrids.ContainsKey(block.CubeGrid.EntityId))
+                return;
+
+            var wall = WelderGrids[block.CubeGrid.EntityId].GetWallAny(block);
+            if (wall != null)
+                WelderGrids[block.CubeGrid.EntityId].RemoveWall(wall);
+        }
+
+        public static void CheckWallConnected(IMyCubeBlock block)
+        {
+            if (!WelderGrids.ContainsKey(block.CubeGrid.EntityId))
+                return;
+
+            WelderGrids[block.CubeGrid.EntityId].CheckWallFunctional(block);
         }
 
         bool GoNow = false;

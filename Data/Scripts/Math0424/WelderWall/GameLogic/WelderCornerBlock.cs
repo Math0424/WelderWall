@@ -1,9 +1,8 @@
-﻿using Sandbox.Game.Entities;
-using Sandbox.Game.EntityComponents;
-using System;
+﻿using Sandbox.Game.EntityComponents;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
+using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
@@ -22,7 +21,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
             _block = (IMyCubeBlock)Entity;
-            NeedsUpdate = VRage.ModAPI.MyEntityUpdateEnum.BEFORE_NEXT_FRAME | VRage.ModAPI.MyEntityUpdateEnum.EACH_100TH_FRAME | VRage.ModAPI.MyEntityUpdateEnum.EACH_FRAME;
+            NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME | MyEntityUpdateEnum.EACH_100TH_FRAME | MyEntityUpdateEnum.EACH_FRAME;
 
             _powerSystem = new MyResourceSinkComponent();
             _powerSystem.Init(MyStringHash.GetOrCompute("Utility"), 100, GetPowerRequirement, null);
@@ -30,8 +29,24 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
             _powerSystem.Update();
         }
 
+        public void CheckFunctional(IMyCubeBlock block)
+        {
+            if (!_block.IsWorking)
+                WelderManager.SetWallDisabled(_block);
+            else
+                WelderManager.AddCorner(_block);
+        }
+
+        private void Removed(IMyEntity ent)
+        {
+            WelderManager.SetWallDisabled(_block);
+        }
+
         public override void UpdateOnceBeforeFrame()
         {
+            _block.IsWorkingChanged += CheckFunctional;
+            _block.OnClose += Removed;
+
             WelderManager.AddCorner(_block);
             WelderManager.TerminalControls.SetEnabled(_block, false);
         }

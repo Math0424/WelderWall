@@ -29,14 +29,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         [ProtoMember(8)] public bool Enabled;
 
         [ProtoMember(9)] public long Owner;
-        /// <summary>
-        /// Are the corners working?
-        /// </summary>
-        [ProtoMember(10)] public bool CornersWorking;
-        /// <summary>
-        /// Are all the poles working?
-        /// </summary>
-        [ProtoMember(12)] public bool Connected;
 
         public List<IMySlimBlock> Blocks;
         public IMyCubeBlock[] Corners;
@@ -47,26 +39,12 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 if (block != null)
                 {
                     WelderManager.TerminalControls.SetValues(block, Enabled, State == WelderState.Weld, PowerInput);
-                    WelderManager.TerminalControls.SetEnabled(block, CanFunction());
+                    WelderManager.TerminalControls.SetEnabled(block, true);
                 }
-        }
-
-        public void UpdateIsWorking()
-        {
-            CornersWorking = true;
-            foreach (var block in Corners)
-            {
-                if (block == null || !block.IsWorking)
-                {
-                    CornersWorking = false;
-                    return;
-                }
-            }
         }
 
         public WelderWall()
         {
-            Connected = true;
             Blocks = new List<IMySlimBlock>();
             Corners = new IMyCubeBlock[4];
         }
@@ -79,10 +57,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         public void SetCorner(int i, IMyCubeBlock corner)
         {
             if (corner == null)
-            {
-                CornersWorking = false;
                 return;
-            }
 
             Corners[i % 4] = corner;
             switch (i % 4) 
@@ -105,7 +80,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         public void RemoveCorner(IMyCubeBlock corner)
         {
-            CornersWorking = false;
             var pos = corner.Position;
             if (BL.HasValue && BL.Value == pos)
             {
@@ -181,21 +155,12 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         }
 
         /// <summary>
-        /// Are we able to function
-        /// </summary>
-        /// <returns></returns>
-        public bool CanFunction()
-        {
-            return Connected && CornersWorking && HasAllCorners();
-        }
-
-        /// <summary>
         /// Should we function
         /// </summary>
         /// <returns></returns>
         public bool IsFunctioning()
         {
-            return CanFunction() && Enabled;
+            return HasAllCorners() && Enabled;
         }
 
         /// <summary>
@@ -211,22 +176,22 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             if (ContainsCorner(pos))
                 return true;
 
-            if (BL.HasValue && BR.HasValue)
-                return IsBetweenPoints(BL.Value, BR.Value, pos);
+            if (BL.HasValue && BR.HasValue && IsBetweenPoints(BL.Value, BR.Value, pos))
+                return true;
 
-            if (TR.HasValue && BR.HasValue)
-                return IsBetweenPoints(TR.Value, BR.Value, pos);
+            if (TR.HasValue && BR.HasValue && IsBetweenPoints(TR.Value, BR.Value, pos))
+                return true;
 
-            if (TR.HasValue && TL.HasValue)
-                return IsBetweenPoints(TR.Value, TL.Value, pos);
+            if (TR.HasValue && TL.HasValue && IsBetweenPoints(TR.Value, TL.Value, pos))
+                return true;
 
-            if (BL.HasValue && TL.HasValue)
-                return IsBetweenPoints(BL.Value, TL.Value, pos);
+            if (BL.HasValue && TL.HasValue && IsBetweenPoints(BL.Value, TL.Value, pos))
+                return true;
 
             return false;
         }
 
-        private bool IsBetweenPoints(Vector3I a, Vector3I b, Vector3I c)
+        private bool IsBetweenPoints(Vector3I a, Vector3I b, Vector3I check)
         {
             bool isAxisAligned = (a.X == b.X && a.Y == b.Y) ||
                                  (a.X == b.X && a.Z == b.Z) ||
@@ -234,13 +199,13 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             if (!isAxisAligned)
                 return false;
 
-            bool withinX = c.X >= Math.Min(a.X, b.X) && c.X <= Math.Max(a.X, b.X);
-            bool withinY = c.Y >= Math.Min(a.Y, b.Y) && c.Y <= Math.Max(a.Y, b.Y);
-            bool withinZ = c.Z >= Math.Min(a.Z, b.Z) && c.Z <= Math.Max(a.Z, b.Z);
+            bool withinX = check.X >= Math.Min(a.X, b.X) && check.X <= Math.Max(a.X, b.X);
+            bool withinY = check.Y >= Math.Min(a.Y, b.Y) && check.Y <= Math.Max(a.Y, b.Y);
+            bool withinZ = check.Z >= Math.Min(a.Z, b.Z) && check.Z <= Math.Max(a.Z, b.Z);
 
-            return ((a.X == b.X && a.X == c.X && withinY && withinZ) ||
-                    (a.Y == b.Y && a.Y == c.Y && withinX && withinZ) ||
-                    (a.Z == b.Z && a.Z == c.Z && withinX && withinY));
+            return ((a.X == b.X && a.X == check.X && withinY && withinZ) ||
+                    (a.Y == b.Y && a.Y == check.Y && withinX && withinZ) ||
+                    (a.Z == b.Z && a.Z == check.Z && withinX && withinY));
         }
 
         public void CalculateID()

@@ -1,14 +1,18 @@
 ﻿using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
+using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
 using System.Text;
 using VRage;
 using VRage.Game;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
+using VRage.Utils;
 using VRageMath;
 using WelderWall.Data.Scripts.Math0424.WelderWall.Util;
 
@@ -33,40 +37,69 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             Load();
         }
 
+        public void CheckWallFunctional(IMyCubeBlock block)
+        {
+            var dir = Base6Directions.GetIntVector(block.Orientation.Up);
+            for (int i = 1; i < WelderManager.Config.GetInt(ConfigOptions.MaxWallSize); i++)
+            {
+                var bBlock = _grid.GetCubeBlock(block.Position + (dir * i));
+                if (bBlock == null || bBlock.FatBlock == null || !bBlock.FatBlock.IsWorking)
+                    return;
+
+                if (bBlock.BlockDefinition.Id.SubtypeId == WelderManager.WelderCorner)
+                {
+                    AddCorner(bBlock.FatBlock);
+                    return;
+                }
+                else if (bBlock.BlockDefinition.Id.SubtypeId == WelderManager.WelderPole)
+                    continue;
+                else
+                    return;
+            }
+        }
+
         public void AddCorner(IMyCubeBlock block)
         {
             WelderWall dummyWall = new WelderWall();
-            TraceAxis(0, dummyWall, block.SlimBlock, block.Orientation.Forward);
+            if (!FindWall(0, dummyWall, block.SlimBlock, block.Orientation.Forward))
+                return;
 
             foreach (var wall in _walls)
                 if (wall.Equals(dummyWall))
                 {
                     wall.Corners = dummyWall.Corners;
+                    wall.UpdateTerminalControls();
                     return;
                 }
-
-            if (!dummyWall.HasAllCorners())
-                return;
 
             dummyWall.Owner = _grid.BigOwners[0];
             dummyWall.PowerInput = 100;
-            dummyWall.UpdateIsWorking();
             dummyWall.UpdateTerminalControls();
 
             _walls.Add(dummyWall);
+            Save();
         }
 
-        public void RemoveCorner(IMyCubeBlock block)
+        public void RemoveWall(WelderWall wall)
+        {
+            _walls.Remove(wall);
+            Save();
+            foreach (var block in wall.Corners)
+                if (block != null)
+                    WelderManager.TerminalControls.SetEnabled(block, false);
+        }
+
+        public void RemoveWall(IMyCubeBlock block)
         {
             foreach (var wall in _walls)
-                if (wall.ContainsCorner(block.Position))
+                if (wall.Contains(block.Position))
                 {
-                    _walls.Remove(wall);
+                    RemoveWall(wall);
                     return;
                 }
         }
 
-        public WelderWall GetWall(IMyCubeBlock block)
+        public WelderWall GetWallByCorner(IMyCubeBlock block)
         {
             foreach(var x in _walls)
             {
@@ -76,10 +109,20 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             return null;
         }
 
-        private void TraceAxis(int index, WelderWall wall, IMySlimBlock corner, Base6Directions.Direction trace)
+        public WelderWall GetWallAny(IMyCubeBlock block)
         {
-            if (corner.BlockDefinition.Id.SubtypeId != WelderManager.WelderCorner || index >= 4)
-                return;
+            foreach (var x in _walls)
+            {
+                if (x.Contains(block.Position))
+                    return x;
+            }
+            return null;
+        }
+
+        private bool FindWall(int index, WelderWall wall, IMySlimBlock corner, Base6Directions.Direction trace)
+        {
+            if (corner.BlockDefinition.Id.SubtypeId != WelderManager.WelderCorner || index >= 5)
+                return false;
             wall.SetCorner(index, corner.FatBlock);
 
             var cOrient = corner.Orientation;
@@ -88,31 +131,32 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             {
                 var bPos = corner.Position + (dir * i);
                 if (wall.ContainsCorner(bPos))
-                    return;
+                    return true;
 
                 var bBlock = _grid.GetCubeBlock(bPos);
-                if (bBlock == null)
-                    return;
+                if (bBlock == null || bBlock.FatBlock == null || !bBlock.FatBlock.IsWorking)
+                    return false;
 
                 if (bBlock.BlockDefinition.Id.SubtypeId == WelderManager.WelderCorner)
                 {
                     var bOrient = bBlock.Orientation;
                     if (cOrient.Forward == Base6Directions.GetOppositeDirection(bOrient.Left) && cOrient.Left == bOrient.Forward)
-                        TraceAxis(index + 1, wall, bBlock, bOrient.Forward);
+                    {
+                        return FindWall(index + 1, wall, bBlock, bOrient.Forward);
+                    }
                     else if (cOrient.Forward == Base6Directions.GetOppositeDirection(bOrient.Forward) && cOrient.Left == bOrient.Left)
-                        TraceAxis(index + 1, wall, bBlock, bOrient.Left);
+                    {
+                        return FindWall(index + 1, wall, bBlock, bOrient.Left);
+                    }
                     else
-                        return;
+                        return false;
                 }
                 else if (bBlock.BlockDefinition.Id.SubtypeId == WelderManager.WelderPole)
-                {
-                    if (!bBlock.FatBlock.IsWorking)
-                        return;
                     continue;
-                }
                 else
-                    return;
+                    return false;
             }
+            return false;
         }
 
         public void Draw()
@@ -177,8 +221,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                     return;
 
                 wall.Blocks.Clear();
-
-                wall.UpdateIsWorking();
                 wall.UpdateTerminalControls();
                 if (!wall.IsFunctioning())
                     continue;
@@ -199,7 +241,12 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                     if (ent == _grid)
                         continue;
                     else if (ent is IMyCharacter)
-                        ((IMyCharacter)ent).DoDamage(1, WelderManager.WelderDamage, true);
+                    {
+                        var character = ((IMyCharacter)ent);
+                        MyOrientedBoundingBoxD characterBounds = new MyOrientedBoundingBoxD(character.WorldMatrix);
+                        if (obb.Intersects(ref characterBounds))
+                            character.DoDamage(1, WelderManager.WelderDamage, true);
+                    }
                     else if(ent is IMyCubeGrid)
                         CalculateGridBlocks(wall, obb, (IMyCubeGrid)ent);
                 }
@@ -254,6 +301,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
                 IMyInventory transferTo = null;
                 transferTo = wall.Corners[0].GetInventory();
+                if (transferTo == null)
+                    return;
 
                 float efficiency = (float)Math.Sin(wall.PowerInput / maxDraw * Math.PI / 2);
                 float efficentyLoss = (1 - (wall.Area() / (float)maxArea)) + 0.25f;
