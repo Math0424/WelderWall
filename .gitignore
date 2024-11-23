@@ -34,6 +34,7 @@ bld/
 [Ll]ogs/
 Bin64/
 Bin64
+*.bat
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/

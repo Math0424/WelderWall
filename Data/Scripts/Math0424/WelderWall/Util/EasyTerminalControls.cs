@@ -1,11 +1,12 @@
-﻿using Microsoft.VisualBasic;
-using ProtoBuf;
+﻿using ProtoBuf;
+using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
+using VRage;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
@@ -103,7 +104,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             }
         }
 
-        private static ConcurrentDictionary<string, List<IMyTerminalControl>> TerminalControls = new ConcurrentDictionary<string, List<IMyTerminalControl>>();
+        private static ConcurrentDictionary<string, List<MyTuple<IMyTerminalControl, Delegate>>> TerminalControls = new ConcurrentDictionary<string, List<MyTuple<IMyTerminalControl, Delegate>>>();
         private static ConcurrentDictionary<long, List<TerminalControlData>> TerminalData = new ConcurrentDictionary<long, List<TerminalControlData>>();
         private static Random r = new Random();
 
@@ -115,7 +116,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             TerminalData.TryAdd(entityId, new List<TerminalControlData>());
             for (int i = 0; i < TerminalControls[blockType].Count; i++)
             {
-                Type t = TerminalControls[blockType][i].GetType();
+                Type t = TerminalControls[blockType][i].Item1.GetType();
                 TerminalType type = TerminalType.None;
                 if (MyAPIGateway.Reflection.IsAssignableFrom(typeof(IMyTerminalControlSlider), t))
                     type = TerminalType.Slider;
@@ -136,40 +137,38 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             PopulateData(block.EntityId, _fullName);
 
             int i = 0;
-            foreach (var x in TerminalData[block.EntityId])
+            foreach (var data in TerminalData[block.EntityId])
             {
-                switch(x.Type)
+                switch (data.Type)
                 {
                     case TerminalType.OnOff:
                     case TerminalType.Checkbox:
-                        if (x.bValue != (bool)values[i])
+                        if (data.bValue != (bool)values[i])
                         {
-                            x.bValue = (bool)values[i];
-                            EasyNetworker.SendToSyncRange(new TerminalControlUpdate(block.EntityId, typeof(T), x), EasyNetworker.TransitType.ExcludeSender);
+                            data.bValue = (bool)values[i];
+                            EasyNetworker.SendToSyncRange(new TerminalControlUpdate(block.EntityId, typeof(T), data), block, EasyNetworker.TransitType.ExcludeSender);
                         }
                         break;
                     case TerminalType.Slider:
-                        if (x.fValue != (float)values[i])
+                        if (data.fValue != (float)values[i])
                         {
-                            x.fValue = (float)values[i];
-                            EasyNetworker.SendToSyncRange(new TerminalControlUpdate(block.EntityId, typeof(T), x), EasyNetworker.TransitType.ExcludeSender);
+                            data.fValue = (float)values[i];
+                            EasyNetworker.SendToSyncRange(new TerminalControlUpdate(block.EntityId, typeof(T), data), block, EasyNetworker.TransitType.ExcludeSender);
                         }
                         break;
                     case TerminalType.ColorPicker:
-                        if (x.cValue != (Color)values[i]) 
+                        if (data.cValue != (Color)values[i])
                         {
-                            x.cValue = (Color)values[i];
-                            EasyNetworker.SendToSyncRange(new TerminalControlUpdate(block.EntityId, typeof(T), x), EasyNetworker.TransitType.ExcludeSender);
+                            data.cValue = (Color)values[i];
+                            EasyNetworker.SendToSyncRange(new TerminalControlUpdate(block.EntityId, typeof(T), data), block, EasyNetworker.TransitType.ExcludeSender);
                         }
                         break;
                     case TerminalType.TextBox:
-                        if (x.sValue != (string)values[i]) 
+                        if (data.sValue != (string)values[i])
                         {
-                            x.sValue = (string)values[i];
-                            EasyNetworker.SendToSyncRange(new TerminalControlUpdate(block.EntityId, typeof(T), x), EasyNetworker.TransitType.ExcludeSender);
+                            data.sValue = (string)values[i];
+                            EasyNetworker.SendToSyncRange(new TerminalControlUpdate(block.EntityId, typeof(T), data), block, EasyNetworker.TransitType.ExcludeSender);
                         }
-                        break;
-                    default:
                         break;
                 }
                 i++;
@@ -195,19 +194,35 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             PopulateData(update.EntityId, update.BlockType);
 
             TerminalData[update.EntityId][update.Data.TerminalId] = update.Data;
-            TerminalControls[update.BlockType][update.Data.TerminalId].RedrawControl();
+            TerminalControls[update.BlockType][update.Data.TerminalId].Item1.RedrawControl();
+
+            var ent = MyEntities.GetEntityById(update.EntityId);
+            if (ent != null && ent is IMyCubeBlock)
+            {
+                switch (update.Data.Type)
+                {
+                    case TerminalType.Slider:
+                        TerminalControls[update.BlockType][update.Data.TerminalId].Item2?.DynamicInvoke(ent, update.Data.fValue);
+                    break;
+                    case TerminalType.OnOff:
+                    case TerminalType.Checkbox:
+                        TerminalControls[update.BlockType][update.Data.TerminalId].Item2?.DynamicInvoke(ent, update.Data.bValue);
+                        break;
+                    case TerminalType.ColorPicker:
+                        TerminalControls[update.BlockType][update.Data.TerminalId].Item2?.DynamicInvoke(ent, update.Data.cValue);
+                        break;
+                    case TerminalType.TextBox:
+                        TerminalControls[update.BlockType][update.Data.TerminalId].Item2?.DynamicInvoke(ent, update.Data.sValue);
+                        break;
+                }
+            }
         }
+
 
         private int _terminalCount;
         private string _prefix;
         private string _subtypeId;
         private string _fullName;
-
-        public EasyTerminalControls(string prefix, string subtypeId)
-        {
-            _prefix = prefix;
-            _subtypeId = subtypeId;
-        }
 
         public EasyTerminalControls(string prefix, MyStringHash subtypeId)
         {
@@ -215,7 +230,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             _subtypeId = subtypeId.String;
             _fullName = typeof(T).FullName;
             if (!TerminalControls.ContainsKey(_fullName))
-                TerminalControls[_fullName] = new List<IMyTerminalControl>();
+                TerminalControls[_fullName] = new List<MyTuple<IMyTerminalControl, Delegate>>();
         }
 
         private bool IsVisible(IMyTerminalBlock b)
@@ -244,11 +259,11 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             TerminalData.Remove(ent.EntityId);
         }
 
-        public EasyTerminalControls<T> WithSlider(string title, Action<IMyTerminalBlock, float, StringBuilder> builder, string tooltip, float min, float max, Action<T, float> changed = null)
+        public EasyTerminalControls<T> WithSlider(string title, Action<IMyCubeBlock, float, StringBuilder> builder, string tooltip, float min, float max, Action<IMyCubeBlock, float> changed = null)
         {
             int terminalId = _terminalCount;
             var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, T>($"{_prefix}_slider_{terminalId}");
-            TerminalControls[_fullName].Add(terminal);
+            TerminalControls[_fullName].Add(new MyTuple<IMyTerminalControl, Delegate>(terminal, changed));
 
             terminal.Title = MyStringId.GetOrCompute(title);
             terminal.Tooltip = MyStringId.GetOrCompute(tooltip);
@@ -262,7 +277,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
                 data.fValue = MathHelper.Clamp(v, min, max);
                 EasyNetworker.SendToSyncRange(new TerminalControlUpdate(b.EntityId, typeof(T), data), EasyNetworker.TransitType.ExcludeSender);
                 TerminalData[b.EntityId][terminalId] = data;
-                changed?.Invoke((T)b, data.fValue);
+                changed?.Invoke(b, data.fValue);
             };
             terminal.Getter = (b) => TerminalData[b.EntityId][terminalId].fValue;
             terminal.Writer = (b, sb) => builder?.Invoke(b, TerminalData[b.EntityId][terminalId].fValue, sb);
@@ -274,11 +289,11 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             return this;
         }
 
-        public EasyTerminalControls<T> WithOnOff(string title, string tooltip, string onText = "On", string offText = "Off", Action<T, bool> changed = null)
+        public EasyTerminalControls<T> WithOnOff(string title, string tooltip, string onText = "On", string offText = "Off", Action<IMyCubeBlock, bool> changed = null)
         {
             int terminalId = _terminalCount;
             var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, T>($"{_prefix}_onoff_{terminalId}");
-            TerminalControls[_fullName].Add(terminal);
+            TerminalControls[_fullName].Add(new MyTuple<IMyTerminalControl, Delegate>(terminal, changed));
 
             terminal.Title = MyStringId.GetOrCompute(title);
             terminal.Tooltip = MyStringId.GetOrCompute(tooltip);
@@ -295,7 +310,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
                 data.bValue = v;
                 EasyNetworker.SendToSyncRange(new TerminalControlUpdate(b.EntityId, typeof(T), data), EasyNetworker.TransitType.ExcludeSender);
                 TerminalData[b.EntityId][terminalId] = data;
-                changed?.Invoke((T)b, data.bValue);
+                changed?.Invoke(b, data.bValue);
             };
             terminal.Getter = (b) => TerminalData[b.EntityId][terminalId].bValue;
 
@@ -304,11 +319,11 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             return this;
         }
 
-        public EasyTerminalControls<T> WithCheckbox(string title, string tooltip, Action<T, bool> changed = null)
+        public EasyTerminalControls<T> WithCheckbox(string title, string tooltip, Action<IMyCubeBlock, bool> changed = null)
         {
             int terminalId = _terminalCount;
             var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, T>($"{_prefix}_onoff_{terminalId}");
-            TerminalControls[_fullName].Add(terminal);
+            TerminalControls[_fullName].Add(new MyTuple<IMyTerminalControl, Delegate>(terminal, changed));
 
             terminal.Title = MyStringId.GetOrCompute(title);
             terminal.Tooltip = MyStringId.GetOrCompute(tooltip);
@@ -322,7 +337,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
                 data.bValue = v;
                 EasyNetworker.SendToSyncRange(new TerminalControlUpdate(b.EntityId, typeof(T), data), EasyNetworker.TransitType.ExcludeSender);
                 TerminalData[b.EntityId][terminalId] = data;
-                changed?.Invoke((T)b, data.bValue);
+                changed?.Invoke(b, data.bValue);
             };
             terminal.Getter = (b) => TerminalData[b.EntityId][terminalId].bValue;
 
@@ -331,11 +346,11 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             return this;
         }
 
-        public EasyTerminalControls<T> WithButton(string title, string tooltip, Action<T> clicked = null)
+        public EasyTerminalControls<T> WithButton(string title, string tooltip, Action<IMyCubeBlock, bool> changed = null)
         {
             int terminalId = _terminalCount;
             var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, T>($"{_prefix}_button_{r.Next()}");
-            TerminalControls[_fullName].Add(terminal);
+            TerminalControls[_fullName].Add(new MyTuple<IMyTerminalControl, Delegate>(terminal, changed));
 
             terminal.Title = MyStringId.GetOrCompute(title);
             terminal.Tooltip = MyStringId.GetOrCompute(tooltip);
@@ -343,18 +358,18 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 
             terminal.Enabled += (b) => Enabled(b, terminalId);
             terminal.Visible += IsVisible;
-            terminal.Action += (b) => clicked?.Invoke((T)b);
+            terminal.Action += (b) => changed?.Invoke((T)b, true);
 
             MyAPIGateway.TerminalControls.AddControl<T>(terminal);
             _terminalCount++;
             return this;
         }
 
-        public EasyTerminalControls<T> WithColorPicker(string title, string tooltip, Action<T, Color> changed = null)
+        public EasyTerminalControls<T> WithColorPicker(string title, string tooltip, Action<IMyCubeBlock, Color> changed = null)
         {
             int terminalId = _terminalCount;
             var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, T>($"{_prefix}_onoff_{terminalId}");
-            TerminalControls[_fullName].Add(terminal);
+            TerminalControls[_fullName].Add(new MyTuple<IMyTerminalControl, Delegate>(terminal, changed));
 
             terminal.Title = MyStringId.GetOrCompute(title);
             terminal.Tooltip = MyStringId.GetOrCompute(tooltip);
@@ -368,7 +383,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
                 data.cValue = v;
                 EasyNetworker.SendToSyncRange(new TerminalControlUpdate(b.EntityId, typeof(T), data), EasyNetworker.TransitType.ExcludeSender);
                 TerminalData[b.EntityId][terminalId] = data;
-                changed?.Invoke((T)b, data.cValue);
+                changed?.Invoke(b, data.cValue);
             };
             terminal.Getter = (b) => TerminalData[b.EntityId][terminalId].cValue;
 
@@ -377,11 +392,11 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             return this;
         }
 
-        public EasyTerminalControls<T> WithTextBox(string title, string tooltip, Action<T, string> changed = null)
+        public EasyTerminalControls<T> WithTextBox(string title, string tooltip, Action<IMyCubeBlock, string> changed = null)
         {
             int terminalId = _terminalCount;
             var terminal = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, T>($"{_prefix}_onoff_{terminalId}");
-            TerminalControls[_fullName].Add(terminal);
+            TerminalControls[_fullName].Add(new MyTuple<IMyTerminalControl, Delegate>(terminal, changed));
 
             terminal.Title = MyStringId.GetOrCompute(title);
             terminal.Tooltip = MyStringId.GetOrCompute(tooltip);
@@ -395,7 +410,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
                 data.sValue = v.ToString();
                 EasyNetworker.SendToSyncRange(new TerminalControlUpdate(b.EntityId, typeof(T), data), EasyNetworker.TransitType.ExcludeSender);
                 TerminalData[b.EntityId][terminalId] = data;
-                changed?.Invoke((T)b, data.sValue);
+                changed?.Invoke(b, data.sValue);
             };
             terminal.Getter = (b) => new StringBuilder(TerminalData[b.EntityId][terminalId].sValue);
 

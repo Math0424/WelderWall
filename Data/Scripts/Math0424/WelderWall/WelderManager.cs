@@ -62,7 +62,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 .WithSeperator();
         }
 
-        private void SliderFormat(IMyTerminalBlock block, float value, StringBuilder sb)
+        private void SliderFormat(IMyCubeBlock block, float value, StringBuilder sb)
         {
             string unit;
             float adjustedValue;
@@ -91,7 +91,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             sb.Append($"{Math.Round(adjustedValue, 2)} {unit}");
         }
 
-        private void Terminal_UpdateEnabled(IMyRefinery container, bool value)
+        private void Terminal_UpdateEnabled(IMyCubeBlock container, bool value)
         {
             if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
             {
@@ -104,7 +104,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             }
         }
 
-        private void Terminal_UpdateWeldGrind(IMyRefinery container, bool value)
+        private void Terminal_UpdateWeldGrind(IMyCubeBlock container, bool value)
         {
             if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
             {
@@ -118,7 +118,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             }
         }
 
-        private void Terminal_UpdatePower(IMyRefinery container, float value)
+        private void Terminal_UpdatePower(IMyCubeBlock container, float value)
         {
             if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
             {

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using VRage.Game;
 using VRage.Game.ModAPI;
+using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
 
@@ -133,6 +134,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 
         /// <summary>
         /// Send to all players within your current sync range
+        /// DO NOT USE ON THE SERVER
         /// </summary>
         /// <param name="obj"></param>
         /// <param name="flag"></param>
@@ -143,6 +145,21 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             packet.Wrap(obj);
             packet.Range = MyAPIGateway.Session.SessionSettings.SyncDistance;
             packet.TransmitLocation = MyAPIGateway.Session.Player.GetPosition();
+            MyAPIGateway.Multiplayer.SendMessageToServer(_commsId, MyAPIGateway.Utilities.SerializeToBinary(packet), reliable);
+        }
+
+        /// <summary>
+        /// Send to all players within your current sync range
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <param name="flag"></param>
+        public static void SendToSyncRange(object obj, IMyEntity center, TransitType flag, bool reliable = true)
+        {
+            //Validate(obj);
+            ServerPacket packet = new ServerPacket(obj.GetType().FullName, flag);
+            packet.Wrap(obj);
+            packet.Range = MyAPIGateway.Session.SessionSettings.SyncDistance;
+            packet.TransmitLocation = center.GetPosition();
             MyAPIGateway.Multiplayer.SendMessageToServer(_commsId, MyAPIGateway.Utilities.SerializeToBinary(packet), reliable);
         }
 

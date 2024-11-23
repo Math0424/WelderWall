@@ -4,6 +4,7 @@ using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using VRage.Game.ModAPI;
+using VRage.Utils;
 using VRageMath;
 
 namespace WelderWall.Data.Scripts.Math0424.WelderWall

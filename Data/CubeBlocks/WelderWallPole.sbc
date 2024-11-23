@@ -7,7 +7,7 @@
 				<SubtypeId>WelderWallPole</SubtypeId>
 			</Id>
 			<DisplayName>WelderWallPole</DisplayName>
-			<Icon>Textures\GUI\Icons\AstronautBackpack.dds</Icon>
+			<Icon>Textures\GUI\Icons\Cubes\WelderWallPole.dds</Icon>
 			<Description>Description_ConveyorTube</Description>
 			<GuiVisible>true</GuiVisible>
 			<CubeSize>Large</CubeSize>
@@ -26,8 +26,9 @@
 			</Components>
 			<CriticalComponent Subtype="Motor" Index="0" />
 			<BuildProgressModels>
-				<Model BuildPercentUpperBound="0.50" File="Models\Cubes\Large\ConveyorTubeConstruction_1.mwm" />
-				<Model BuildPercentUpperBound="1.00" File="Models\Cubes\Large\ConveyorTubeConstruction_2.mwm" />
+				<Model BuildPercentUpperBound="0.33" File="Models\Cubes\large\WelderWallPole_BS3.mwm"/>
+				<Model BuildPercentUpperBound="0.67" File="Models\Cubes\large\WelderWallPole_BS2.mwm"/>
+				<Model BuildPercentUpperBound="1.00" File="Models\Cubes\large\WelderWallPole_BS1.mwm"/>
 			</BuildProgressModels>
 			<EdgeType>Light</EdgeType>
 			<BuildTimeSeconds>7</BuildTimeSeconds>
