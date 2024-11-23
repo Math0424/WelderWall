@@ -13,6 +13,14 @@
 			</RegisteredStorageGuids>
 		</EntityComponent>
 
+		<EntityComponent xsi:type="MyObjectBuilder_InventoryComponentDefinition">
+			<Id>
+				<TypeId>Inventory</TypeId>
+				<SubtypeId>WelderWallCorner</SubtypeId>
+			</Id>
+			<Size x="1" y="1" z="1" />
+		</EntityComponent>
+
 	</EntityComponents>
 
 </Definitions>

@@ -1,5 +1,7 @@
-﻿using Sandbox.Game.Entities;
+﻿using Sandbox.Definitions;
+using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
+using Sandbox.Game.GameSystems.Conveyors;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using System;
@@ -61,7 +63,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         public void AddCorner(IMyCubeBlock block)
         {
             WelderWall dummyWall = new WelderWall();
-            if (!FindWall(0, dummyWall, block.SlimBlock, block.Orientation.Forward))
+            if (!FindWall(0, dummyWall, block.SlimBlock, Base6Directions.GetOppositeDirection(block.Orientation.Forward)))
                 return;
 
             foreach (var wall in _walls)
@@ -86,7 +88,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             Save();
             foreach (var block in wall.Corners)
                 if (block != null)
-                    WelderManager.TerminalControls.SetEnabled(block, false);
+                    WelderManager.TerminalControls.SetAllEnabled(block, false);
         }
 
         public void RemoveWall(IMyCubeBlock block)
@@ -121,13 +123,16 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         private bool FindWall(int index, WelderWall wall, IMySlimBlock corner, Base6Directions.Direction trace)
         {
-            if (corner.BlockDefinition.Id.SubtypeId != WelderManager.WelderCorner || index >= 5)
+            if (corner.BlockDefinition.Id.SubtypeId != WelderManager.WelderCorner)
                 return false;
+            if (index >= 5)
+                return wall.ContainsCorner(corner.Position);
+
             wall.SetCorner(index, corner.FatBlock);
 
             var cOrient = corner.Orientation;
             var dir = Base6Directions.GetIntVector(trace);
-            for (int i = 1; i < WelderManager.Config.GetInt(ConfigOptions.MaxWallSize); i++)
+            for (int i = 2; i < WelderManager.Config.GetInt(ConfigOptions.MaxWallSize); i++)
             {
                 var bPos = corner.Position + (dir * i);
                 if (wall.ContainsCorner(bPos))
@@ -140,14 +145,14 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 if (bBlock.BlockDefinition.Id.SubtypeId == WelderManager.WelderCorner)
                 {
                     var bOrient = bBlock.Orientation;
-                    if (cOrient.Forward == Base6Directions.GetOppositeDirection(bOrient.Left) && cOrient.Left == bOrient.Forward)
-                    {
-                        return FindWall(index + 1, wall, bBlock, bOrient.Forward);
-                    }
-                    else if (cOrient.Forward == Base6Directions.GetOppositeDirection(bOrient.Forward) && cOrient.Left == bOrient.Left)
-                    {
-                        return FindWall(index + 1, wall, bBlock, bOrient.Left);
-                    }
+                    if (cOrient.Forward == Base6Directions.GetOppositeDirection(bOrient.Forward) && cOrient.Left == bOrient.Left)
+                        return FindWall(index + 1, wall, bBlock, Base6Directions.GetOppositeDirection(bOrient.Left));
+                    else if (cOrient.Forward == Base6Directions.GetOppositeDirection(bOrient.Left) && cOrient.Left == bOrient.Forward)
+                        return FindWall(index + 1, wall, bBlock, Base6Directions.GetOppositeDirection(bOrient.Forward));
+                    else if (cOrient.Left == Base6Directions.GetOppositeDirection(bOrient.Forward) && cOrient.Forward == bOrient.Left)
+                        return FindWall(index + 1, wall, bBlock, Base6Directions.GetOppositeDirection(bOrient.Left));
+                    else if (cOrient.Left == Base6Directions.GetOppositeDirection(bOrient.Left) && cOrient.Forward == bOrient.Forward)
+                        return FindWall(index + 1, wall, bBlock, Base6Directions.GetOppositeDirection(bOrient.Forward));
                     else
                         return false;
                 }
@@ -163,7 +168,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         {
             foreach(var wall in _walls)
             {
-                if (!wall.IsFunctioning())
+                if (!wall.IsFunctional())
                     continue;
 
                 Vector3D worldCenter = Vector3D.Transform(((Vector3D)(wall.TR.Value + wall.BL.Value)) / 2 * _grid.GridSize, _grid.WorldMatrix);
@@ -222,7 +227,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
                 wall.Blocks.Clear();
                 wall.UpdateTerminalControls();
-                if (!wall.IsFunctioning())
+                if (!wall.IsFunctional())
                     continue;
 
                 Vector3D worldCenter = Vector3D.Transform(((Vector3D)(wall.TR.Value + wall.BL.Value)) / 2 * _grid.GridSize, _grid.WorldMatrix);
@@ -293,15 +298,15 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
             foreach (var wall in _walls)
             {
-                if (!wall.IsFunctioning())
+                if (!wall.IsFunctional())
                     continue;
 
                 foreach (var x in wall.Blocks)
                     x.DrawAABB(Color.Green);
 
-                IMyInventory transferTo = null;
-                transferTo = wall.Corners[0].GetInventory();
-                if (transferTo == null)
+                IMyCubeBlock cubeBlock = wall.Corners[0];
+                IMyInventory cubeBlockInv = cubeBlock.GetInventory();
+                if (cubeBlockInv == null)
                     return;
 
                 float efficiency = (float)Math.Sin(wall.PowerInput / maxDraw * Math.PI / 2);
@@ -316,38 +321,46 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                         {
                             if (block.CubeGrid.Physics == null)
                             {
-                                ((IMyProjector)((MyCubeGrid)block.CubeGrid).Projector).Build(block, wall.Owner, wall.Owner, true);
+                                var coreItem = ((MyCubeBlockDefinition)block.BlockDefinition).Components[0].Definition.Id;
+                                if (cubeBlockInv.ContainItems(1, coreItem))
+                                    cubeBlockInv.RemoveItemsOfType(1, coreItem);
+                                else if(_grid.ConveyorSystem.PullItem(coreItem, 1, cubeBlock, cubeBlockInv, true).RawValue == 0)
+                                    continue;
+                                ((IMyProjector)((MyCubeGrid)block.CubeGrid).Projector).Build(block, wall.Owner, cubeBlock.EntityId, false);
                                 continue;
                             }
 
-                            if (block.CubeGrid.Physics == null)
+                            if (block.IsFullIntegrity && !block.HasDeformation)
                                 continue;
 
-                            block.MoveItemsToConstructionStockpile(transferTo);
-                            block.MoveItemsFromConstructionStockpile(transferTo, MyItemFlags.Damaged);
-                            
-                            if (block.CanContinueBuild(transferTo))
+                            block.MoveItemsToConstructionStockpile(cubeBlockInv);
+                            block.MoveItemsFromConstructionStockpile(cubeBlockInv, MyItemFlags.Damaged);
+
+                            if (block.CanContinueBuild(cubeBlockInv))
                             {
-                                float weldSpeed = efficiency * WelderManager.Config.GetFloat(ConfigOptions.Speed) * delta;
-                                block.IncreaseMountLevel(weldSpeed, wall.Owner, transferTo);
+                                float weldSpeed = efficiency * WelderManager.Config.GetFloat(ConfigOptions.Speed) * delta * 0.5f;
+                                block.IncreaseMountLevel(weldSpeed, wall.Owner, cubeBlockInv);
                             }
                         }
                         break;
                     case WelderState.Grind:
-                        foreach (var block in wall.Blocks)
+                        topLoop: foreach (var block in wall.Blocks)
                         {
                             float grindSpeed = efficiency * WelderManager.Config.GetFloat(ConfigOptions.Speed) * delta;
-                            block.DecreaseMountLevel(grindSpeed, transferTo, true);
-                            block.MoveItemsFromConstructionStockpile(transferTo);
+
+                            if (block.FatBlock != null && block.FatBlock.HasInventory)
+                                for (int i = 0; i < block.FatBlock.InventoryCount; i++)
+                                    if (!SlowlyEmptyBlock(block.FatBlock.GetInventory(i), cubeBlock))
+                                        goto topLoop;
+
+                            if (!SlowlyEmptyBlock(cubeBlockInv, cubeBlock))
+                                continue;
+
+                            block.DecreaseMountLevel(grindSpeed, cubeBlockInv, true);
+                            block.MoveItemsFromConstructionStockpile(cubeBlockInv);
 
                             if (block.IsFullyDismounted)
-                            {
-                                if (block.FatBlock != null && block.FatBlock.HasInventory)
-                                    EmptyBlockInventories(block.FatBlock, wall, transferTo);
-
-                                block.SpawnConstructionStockpile();
                                 block.CubeGrid.RazeBlock(block.Min);
-                            }
                         }
                         break;
                 }
@@ -374,8 +387,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             //  TL---TR
             //  |     |
             //  BL---BR
-            GetPointsInPlane(TL, TR, BL, welds, minBounds, maxBounds);
-            GetPointsInPlane(BL, TR, BR, welds, minBounds, maxBounds);
+            GetPointsInPlane(TL, TR, BL, BR, welds, minBounds, maxBounds);
+            //GetPointsInPlane(BL, TR, BR, welds, minBounds, maxBounds);
 
             foreach (var wPos in welds)
             {
@@ -386,7 +399,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         }
 
-        private void GetPointsInPlane(Vector3I v1, Vector3I v2, Vector3I v3, HashSet<Vector3I> points, Vector3I minBounds, Vector3I maxBounds)
+        private void GetPointsInPlane(Vector3I v1, Vector3I v2, Vector3I v3, Vector3I v4, HashSet<Vector3I> points, Vector3I minBounds, Vector3I maxBounds)
         {
             Vector3 normal = Vector3.Cross(v2 - v1, v3 - v1);
             double d = -Vector3.Dot(normal, v1);
@@ -403,7 +416,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                         if (zRound >= minBounds.Z && zRound <= maxBounds.Z)
                         {
                             Vector3I projectedPoint = new Vector3I(x, y, zRound);
-                            if (IsPointInTriangle(projectedPoint, v1, v2, v3))
+                            if (IsPointInTriangle(projectedPoint, v1, v2, v3) || IsPointInTriangle(projectedPoint, v2, v3, v4))
                             {
                                 points.Add(projectedPoint);
                             }
@@ -424,7 +437,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                         if (yRound >= minBounds.Y && yRound <= maxBounds.Y)
                         {
                             Vector3I projectedPoint = new Vector3I(x, yRound, z);
-                            if (IsPointInTriangle(projectedPoint, v1, v2, v3))
+                            if (IsPointInTriangle(projectedPoint, v1, v2, v3) || IsPointInTriangle(projectedPoint, v2, v3, v4))
                             {
                                 points.Add(projectedPoint);
                             }
@@ -445,7 +458,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                         if (xRound >= minBounds.X && xRound <= maxBounds.X)
                         {
                             Vector3I projectedPoint = new Vector3I(xRound, y, z);
-                            if (IsPointInTriangle(projectedPoint, v1, v2, v3))
+                            if (IsPointInTriangle(projectedPoint, v1, v2, v3) || IsPointInTriangle(projectedPoint, v2, v3, v4))
                             {
                                 points.Add(projectedPoint);
                             }
@@ -474,20 +487,19 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             return (u >= 0) && (v >= 0) && (u + v <= 1);
         }
 
-        private static List<VRage.Game.ModAPI.Ingame.MyInventoryItem> m_tmpItemList = new List<VRage.Game.ModAPI.Ingame.MyInventoryItem>();
-        private void EmptyBlockInventories(IMyCubeBlock block, WelderWall wall, IMyInventory transferTo)
+        private bool SlowlyEmptyBlock(IMyInventory inventory, IMyEntity sourceBlock)
         {
-            for (int i = 0; i < block.InventoryCount; i++)
-            {
-                IMyInventory inventory = block.GetInventory(i);
-                if (!inventory.Empty())
-                {
-                    m_tmpItemList.Clear();
-                    inventory.GetItems(m_tmpItemList);
-                    foreach (VRage.Game.ModAPI.Ingame.MyInventoryItem item in m_tmpItemList)
-                        transferTo.TransferItemFrom(inventory, item, item.Amount);
-                }
-            }
+            if (inventory.Empty())
+                return true;
+
+            var item = inventory.GetItemAt(0);
+            if (!item.HasValue)
+                return true;
+            
+            MyFixedPoint transferAmount;
+            if (_grid.ConveyorSystem.PushGenerateItem(item.Value.Type, item.Value.Amount, out transferAmount, sourceBlock, false))
+                inventory.RemoveItemsAt(0);
+            return false;
         }
 
         public void Close(IMyEntity ent)

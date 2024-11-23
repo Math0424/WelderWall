@@ -1,4 +1,6 @@
 ﻿using ProtoBuf;
+using Sandbox.Game.EntityComponents;
+using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using VRage.Game.ModAPI;
@@ -26,7 +28,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         [ProtoMember(6)] public WelderState State;
         [ProtoMember(7)] public float PowerInput;
-        [ProtoMember(8)] public bool Enabled;
 
         [ProtoMember(9)] public long Owner;
 
@@ -38,8 +39,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             foreach(var block in Corners)
                 if (block != null)
                 {
-                    WelderManager.TerminalControls.SetValues(block, Enabled, State == WelderState.Weld, PowerInput);
-                    WelderManager.TerminalControls.SetEnabled(block, true);
+                    WelderManager.TerminalControls.SetValues(block, State == WelderState.Weld, PowerInput);
+                    WelderManager.TerminalControls.SetAllEnabled(block, true);
                 }
         }
 
@@ -113,9 +114,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         public float RequiredPower()
         {
-            if (IsFunctioning())
-                return PowerInput / 4;
-            return 0;
+            return PowerInput / 4;
         }
 
         /// <summary>
@@ -158,9 +157,14 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         /// Should we function
         /// </summary>
         /// <returns></returns>
-        public bool IsFunctioning()
+        public bool IsFunctional()
         {
-            return HasAllCorners() && Enabled;
+            if (PowerInput == 0 || !HasAllCorners())
+                return false;
+            foreach (var block in Corners)
+                if (!block.IsWorking || block.ResourceSink.SuppliedRatioByType(MyResourceDistributorComponent.ElectricityId) != 1)
+                    return false;
+            return true;
         }
 
         /// <summary>

@@ -1,4 +1,5 @@
 ﻿using Sandbox.Common.ObjectBuilders;
+using Sandbox.Game.Entities;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
@@ -18,6 +19,9 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
 
         public override void UpdateOnceBeforeFrame()
         {
+            if (_block.CubeGrid.Physics == null || ((MyCubeGrid)_block.CubeGrid).IsPreview)
+                return;
+
             _block.IsWorkingChanged += CheckFunctional;
             _block.OnClose += Removed;
         }

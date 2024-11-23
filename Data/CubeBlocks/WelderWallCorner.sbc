@@ -1,9 +1,9 @@
 <?xml version="1.0" ?>
 <Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
 	<CubeBlocks>
-		<Definition xsi:type="MyObjectBuilder_CargoContainerDefinition">
+		<Definition xsi:type="MyObjectBuilder_RefineryDefinition">
 			<Id>
-				<TypeId>CargoContainer</TypeId>
+				<TypeId>Refinery</TypeId>
 				<SubtypeId>WelderWallCorner</SubtypeId>
 			</Id>
 			<DisplayName>WelderWallCorner</DisplayName>
@@ -15,24 +15,26 @@
 			<ModelOffset x="0" y="0" z="0" />
 			<Model>Models\Cubes\large\WelderWallCorner.mwm</Model>
 			<Components>
-				<Component Subtype="InteriorPlate" Count="30" />
-				<Component Subtype="Construction" Count="35" />
-				<Component Subtype="MetalGrid" Count="4" />
+				<Component Subtype="InteriorPlate" Count="20" />
+				<Component Subtype="Construction" Count="50" />
+				<Component Subtype="MetalGrid" Count="10" />
 				<Component Subtype="SmallTube" Count="20" />
-				<Component Subtype="Motor" Count="4" />
-				<Component Subtype="Display" Count="1" />
-				<Component Subtype="Computer" Count="2" />
-				<Component Subtype="Construction" Count="5" />
-				<Component Subtype="InteriorPlate" Count="10" />
+				<Component Subtype="Superconductor" Count="50" />
+				<Component Subtype="Motor" Count="8" />
+				<Component Subtype="Display" Count="3" />
+				<Component Subtype="Girder" Count="10" />
+				<Component Subtype="Computer" Count="50" />
+				<Component Subtype="Construction" Count="40" />
+				<Component Subtype="InteriorPlate" Count="30" />
 			</Components>
 			<CriticalComponent Subtype="Computer" Index="0" />
 			<MountPoints>
-				<MountPoint Side="Front" StartX="0.00" StartY="0.00" EndX="1.00" EndY="1.00"/>
-				<MountPoint Side="Back" StartX="1.00" StartY="0.00" EndX="2.00" EndY="1.00"/>
-				<MountPoint Side="Left" StartX="1.00" StartY="0.00" EndX="2.00" EndY="1.00"/>
-				<MountPoint Side="Right" StartX="0.00" StartY="0.00" EndX="1.00" EndY="1.00"/>
-				<MountPoint Side="Top" StartX="1.00" StartY="0.02" EndX="2.00" EndY="0.98"/>
-				<MountPoint Side="Bottom" StartX="1.00" StartY="1.00" EndX="2.00" EndY="2.00"/>
+				<MountPoint Side="Front" StartX="1.00" StartY="0.00" EndX="2.00" EndY="1.00"/>
+				<MountPoint Side="Back" StartX="0.00" StartY="0.00" EndX="1.00" EndY="1.00"/>
+				<MountPoint Side="Left" StartX="0.00" StartY="0.00" EndX="1.00" EndY="1.00"/>
+				<MountPoint Side="Right" StartX="1.00" StartY="0.00" EndX="2.00" EndY="1.00"/>
+				<MountPoint Side="Top" StartX="0.00" StartY="1.02" EndX="1.00" EndY="1.98"/>
+				<MountPoint Side="Bottom" StartX="0.00" StartY="0.00" EndX="1.00" EndY="1.00"/>
 			</MountPoints>
 			<BuildProgressModels>
 				<Model BuildPercentUpperBound="0.33" File="Models\Cubes\Large\CargoContainerSmallConstruction_1.mwm" />
@@ -40,16 +42,40 @@
 				<Model BuildPercentUpperBound="1.00" File="Models\Cubes\Large\CargoContainerSmallConstruction_3.mwm" />
 			</BuildProgressModels>
 			<EdgeType>Light</EdgeType>
-			<BuildTimeSeconds>15</BuildTimeSeconds>
+			<BuildTimeSeconds>50</BuildTimeSeconds>
 			<DamageEffectName>Damage_HeavyMech_Damaged</DamageEffectName>
 			<DamagedSound>ParticleHeavyMech</DamagedSound>
 			<DestroyEffect>BlockDestroyedExplosion_Large</DestroyEffect>
 			<DestroySound>WepSmallWarheadExpl</DestroySound>
-			<PCU>10</PCU>
+			<PCU>50</PCU>
 			<IsAirTight>true</IsAirTight>
-			<MirroringX>XHalfZ</MirroringX>
-			<MirroringY>UnsupportedXZ1</MirroringY>
-			<MirroringZ>MinusHalfZ</MirroringZ>
+			<MirroringX>HalfY</MirroringX>
+			<MirroringZ>MinusHalfY</MirroringZ>
+
+
+			<StandbyPowerConsumption>0</StandbyPowerConsumption>
+			<OperationalPowerConsumption>1</OperationalPowerConsumption>
+			<ResourceSinkGroup>Utility</ResourceSinkGroup>
+
+			<InventoryMaxVolume>1</InventoryMaxVolume>
+			<InventorySize>
+				<X>1</X>
+				<Y>1</Y>
+				<Z>1</Z>
+			</InventorySize>
+
+			<InventoryFillFactorMin>0.3</InventoryFillFactorMin>
+			<InventoryFillFactorMax>0.6</InventoryFillFactorMax>
+
+			<RefineSpeed>0</RefineSpeed>
+			<MaterialEfficiency>0</MaterialEfficiency>
+			<OreAmountPerPullRequest>0</OreAmountPerPullRequest>
+			<PrimarySound>BlockRafinery</PrimarySound>
+			<ActionSound>BlockRafineryProcess</ActionSound>
+			<EmissiveColorPreset>Default</EmissiveColorPreset>
+			<BlueprintClasses>
+				<Class>Ingots</Class>
+			</BlueprintClasses>
 		</Definition>
 	</CubeBlocks>
 </Definitions>

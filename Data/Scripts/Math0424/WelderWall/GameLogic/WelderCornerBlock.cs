@@ -1,8 +1,15 @@
-﻿using Sandbox.Game.EntityComponents;
+﻿using Sandbox.Common.ObjectBuilders;
+using Sandbox.Engine.Utils;
+using Sandbox.Game;
+using Sandbox.Game.Entities;
+using Sandbox.Game.EntityComponents;
+using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.Components;
+using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
+using VRage.Noise.Combiners;
 using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
@@ -10,28 +17,45 @@ using WelderWall.Data.Scripts.Math0424.WelderWall.Util;
 
 namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
 {
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_CargoContainer), true, WelderManager.WelderCornerName)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Refinery), true, WelderManager.WelderCornerName)]
     internal class WelderCornerBlock : MyGameLogicComponent
     {
-        IMyCubeBlock _block;
+        IMyRefinery _block;
         float _powerConsumption;
-        MyResourceSinkComponent _powerSystem;
+        MyResourceSinkComponent _power;
         bool _drawCorners = false;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            _block = (IMyCubeBlock)Entity;
-            NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME | MyEntityUpdateEnum.EACH_100TH_FRAME | MyEntityUpdateEnum.EACH_FRAME;
+            _block = (IMyRefinery)Entity; 
+            NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+        }
 
-            _powerSystem = new MyResourceSinkComponent();
-            _powerSystem.Init(MyStringHash.GetOrCompute("Utility"), 100, GetPowerRequirement, null);
-            Entity.Components.Add(_powerSystem);
-            _powerSystem.Update();
+        public override void UpdateOnceBeforeFrame()
+        {
+            if (_block.CubeGrid.Physics == null || ((MyCubeGrid)_block.CubeGrid).IsPreview)
+                return;
+
+            NeedsUpdate = MyEntityUpdateEnum.EACH_100TH_FRAME | MyEntityUpdateEnum.EACH_FRAME;
+
+            _power = _block.Components.Get<MyResourceSinkComponent>();
+            _power.SetRequiredInputFuncByType(MyResourceDistributorComponent.ElectricityId, GetPowerRequirement);
+
+            for (int i = 0; i < _block.InventoryCount; i++)
+            {
+                ((MyInventory)_block.GetInventory(i)).Constraint = null;
+                ((MyInventory)_block.GetInventory(i)).SetFlags(MyInventoryFlags.CanSend);
+            }
+            _block.IsWorkingChanged += CheckFunctional;
+            _block.OnClose += Removed;
+
+            WelderManager.TerminalControls.SetAllEnabled(_block, false);
+            WelderManager.AddCorner(_block);
         }
 
         public void CheckFunctional(IMyCubeBlock block)
         {
-            if (!_block.IsWorking)
+            if (!_block.IsFunctional)
                 WelderManager.SetWallDisabled(_block);
             else
                 WelderManager.AddCorner(_block);
@@ -42,23 +66,14 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
             WelderManager.SetWallDisabled(_block);
         }
 
-        public override void UpdateOnceBeforeFrame()
-        {
-            _block.IsWorkingChanged += CheckFunctional;
-            _block.OnClose += Removed;
-
-            WelderManager.AddCorner(_block);
-            WelderManager.TerminalControls.SetEnabled(_block, false);
-        }
-
         public override void UpdateBeforeSimulation()
         {
-            if (_drawCorners)
+            if (_drawCorners && !MyAPIGateway.Utilities.IsDedicated)
             {
                 var matrix = _block.WorldMatrix;
                 float length = WelderManager.Config.GetInt(ConfigOptions.MaxWallSize) * _block.CubeGrid.GridSize;
-                EasyDraw.DrawLine(matrix.Translation, matrix.Forward, length, Color.Blue, .1f);
-                EasyDraw.DrawLine(matrix.Translation, matrix.Left, length, Color.Blue, .1f);
+                EasyDraw.DrawLine(matrix.Translation, matrix.Backward, length, Color.Blue, .1f);
+                EasyDraw.DrawLine(matrix.Translation, matrix.Right, length, Color.Blue, .1f);
             }
         }
 
@@ -69,8 +84,13 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
             if (wall == null)
                 return;
 
-            _powerConsumption = wall.RequiredPower();
-            _powerSystem.Update();
+            float newPowerConsumption = wall.RequiredPower() / 1000000;
+            if (_powerConsumption !=  newPowerConsumption)
+            {
+                _powerConsumption = newPowerConsumption;
+                _power.Update();
+                ((MyResourceDistributorComponent)_block.CubeGrid.ResourceDistributor).MarkForUpdate();
+            }
         }
 
         public float GetPowerRequirement()

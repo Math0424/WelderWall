@@ -17,9 +17,11 @@
 			<Model>Models\Cubes\large\WelderWallPole.mwm</Model>
 			<Components>
 				<Component Subtype="InteriorPlate" Count="10" />
-				<Component Subtype="Construction" Count="20" />
-				<Component Subtype="SmallTube" Count="12" />
-				<Component Subtype="Motor" Count="6" />
+				<Component Subtype="Construction" Count="10" />
+				<Component Subtype="Superconductor" Count="3" />
+				<Component Subtype="SmallTube" Count="16" />
+				<Component Subtype="Girder" Count="3" />
+				<Component Subtype="Motor" Count="5" />
 				<Component Subtype="InteriorPlate" Count="4" />
 			</Components>
 			<CriticalComponent Subtype="Motor" Index="0" />
@@ -39,10 +41,11 @@
 			<DamagedSound>ParticleHeavyMech</DamagedSound>
 			<DestroyEffect>BlockDestroyed_Large</DestroyEffect>
 			<DestroySound>PoofExplosionCat3</DestroySound>
-			<PCU>10</PCU>
+			<PCU>1</PCU>
 			<IsAirTight>false</IsAirTight>
 			<MirroringX>HalfY</MirroringX>
 			<MirroringZ>MinusHalfY</MirroringZ>
+			<MirroringY>Z</MirroringY>
 		</Definition>
 	</CubeBlocks>
 </Definitions>

@@ -33,14 +33,14 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         public static MyStringHash WelderPole = MyStringHash.Get(WelderPoleName);
         public static MyStringHash WelderDamage = MyStringHash.Get("Welder");
         public static EasyConfiguration Config;
-        public static EasyTerminalControls<IMyCargoContainer> TerminalControls;
+        public static EasyTerminalControls<IMyRefinery> TerminalControls;
 
         private static Dictionary<long, WelderGrid> WelderGrids;
 
         private Dictionary<Enum, object> defaultConfig = new Dictionary<Enum, object>()
         {
             { ConfigOptions.Speed, 0.25f },
-            { ConfigOptions.MaxPower, 1000000f },
+            { ConfigOptions.MaxPower, 100000000f },
             { ConfigOptions.MaxWallSize, 50 },
             { ConfigOptions.MaxActionsPerTick, 100 },
         };
@@ -55,9 +55,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             EasyNetworker.Init(22345);
             Config = new EasyConfiguration(false, "WelderWallConfig.cfg", defaultConfig);
 
-            TerminalControls = new EasyTerminalControls<IMyCargoContainer>("WelderWallMod", WelderCorner)
+            TerminalControls = new EasyTerminalControls<IMyRefinery>("WelderWallMod", WelderCorner)
                 .WithSeperator()
-                .WithOnOff("Powered", "Enabled", "On", "Off", Terminal_UpdateEnabled)
                 .WithOnOff("Action", "Weld or Grind", "Weld", "Grind", Terminal_UpdateWeldGrind)
                 .WithSlider("Power Input", SliderFormat, "Max Power Draw", 0, Config.GetFloat(ConfigOptions.MaxPower), Terminal_UpdatePower)
                 .WithSeperator();
@@ -92,21 +91,20 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             sb.Append($"{Math.Round(adjustedValue, 2)} {unit}");
         }
 
-        private void Terminal_UpdateEnabled(IMyCargoContainer container, bool value)
+        private void Terminal_UpdateEnabled(IMyRefinery container, bool value)
         {
             if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
             {
                 WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWallByCorner(container);
                 if (wall != null)
                 {
-                    wall.Enabled = value;
                     wall.UpdateTerminalControls();
                     WelderGrids[container.CubeGrid.EntityId].Save();
                 }
             }
         }
 
-        private void Terminal_UpdateWeldGrind(IMyCargoContainer container, bool value)
+        private void Terminal_UpdateWeldGrind(IMyRefinery container, bool value)
         {
             if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
             {
@@ -120,7 +118,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             }
         }
 
-        private void Terminal_UpdatePower(IMyCargoContainer container, float value)
+        private void Terminal_UpdatePower(IMyRefinery container, float value)
         {
             if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
             {
@@ -193,15 +191,13 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             WelderGrids[block.CubeGrid.EntityId].CheckWallFunctional(block);
         }
 
-        bool GoNow = false;
+        int tick = 0;
         public override void UpdateBeforeSimulation()
         {
             if (!MyAPIGateway.Session.IsServer)
                 return;
 
-            // 30 TPS
-            GoNow = !GoNow;
-            if (!GoNow || WelderGrids.Count == 0)
+            if (tick++ % 3 == 0 || WelderGrids.Count == 0)
                 return;
 
             int totalActionCount = 0;
@@ -230,7 +226,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
             // preform the actions on the blocks
             foreach (var wall in active)
-                wall.DispatchBlocks(2);
+                wall.DispatchBlocks(3);
         }
 
         public override void Draw()
