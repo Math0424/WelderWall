@@ -7,7 +7,7 @@
 				<SubtypeId>WelderWallCorner</SubtypeId>
 			</Id>
 			<DisplayName>WelderWallCorner</DisplayName>
-			<Icon>Textures\GUI\Icons\AstronautBackpack.dds</Icon>
+			<Icon>Textures\GUI\Icons\Cubes\WelderWallCorner.dds</Icon>
 			<Description>Description_SmallCargoContainer</Description>
 			<CubeSize>Large</CubeSize>
 			<BlockTopology>TriangleMesh</BlockTopology>
@@ -37,9 +37,8 @@
 				<MountPoint Side="Bottom" StartX="0.00" StartY="0.00" EndX="1.00" EndY="1.00"/>
 			</MountPoints>
 			<BuildProgressModels>
-				<Model BuildPercentUpperBound="0.33" File="Models\Cubes\Large\CargoContainerSmallConstruction_1.mwm" />
-				<Model BuildPercentUpperBound="0.66" File="Models\Cubes\Large\CargoContainerSmallConstruction_2.mwm" />
-				<Model BuildPercentUpperBound="1.00" File="Models\Cubes\Large\CargoContainerSmallConstruction_3.mwm" />
+				<Model BuildPercentUpperBound="0.50" File="Models\Cubes\large\WelderWallCorner_BS1.mwm"/>
+				<Model BuildPercentUpperBound="1.00" File="Models\Cubes\large\WelderWallCorner_BS2.mwm"/>
 			</BuildProgressModels>
 			<EdgeType>Light</EdgeType>
 			<BuildTimeSeconds>50</BuildTimeSeconds>

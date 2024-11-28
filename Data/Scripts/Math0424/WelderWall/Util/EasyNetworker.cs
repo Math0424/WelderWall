@@ -39,8 +39,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         public enum TransitType
         {
             ToServer = 1,
-            ToAll = 2,
-            ExcludeSender = 4,
+            ToAll = 2 | ToServer,
+            ExcludeSender = 4 | ToAll,
         }
 
         private static ushort _commsId;
@@ -86,16 +86,17 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             }
         }
 
-        public static void RegisterPacket<T>(Action<T> callee)
+        public static void RegisterPacket<T>(Action<ulong, T> callee)
         {
             var type = typeof(T);
             if (_table.ContainsKey(type.FullName))
                 MyLog.Default.WriteLineAndConsole($"Replacing registered delegate for '{type.FullName}'");
-            _registry[type] = (e) => callee.Invoke(e.UnWrap<T>());
+            _registry[type] = (e) => callee.Invoke(e.SenderId, e.UnWrap<T>());
             _table[type.FullName] = type;
         }
 
         /// <summary>
+        /// SERVER METHOD
         /// Sends a packet to the players from server
         /// </summary>
         /// <param name="obj"></param>
@@ -109,6 +110,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         }
 
         /// <summary>
+        /// SERVER METHOD
         /// Send a packet to the a player from server
         /// </summary>
         /// <param name="obj"></param>
@@ -121,6 +123,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         }
 
         /// <summary>
+        /// CLIENT METHOD
         /// Send a packet to the server
         /// </summary>
         /// <param name="obj"></param>
@@ -133,8 +136,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         }
 
         /// <summary>
+        /// CLIENT METHOD
         /// Send to all players within your current sync range
-        /// DO NOT USE ON THE SERVER
         /// </summary>
         /// <param name="obj"></param>
         /// <param name="flag"></param>
@@ -149,11 +152,12 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         }
 
         /// <summary>
+        /// SERVER METHOD
         /// Send to all players within your current sync range
         /// </summary>
         /// <param name="obj"></param>
         /// <param name="flag"></param>
-        public static void SendToSyncRange(object obj, IMyEntity center, TransitType flag, bool reliable = true)
+        public static void SendToSyncRange(object obj, IMyEntity center, TransitType flag = TransitType.ToAll, bool reliable = true)
         {
             //Validate(obj);
             ServerPacket packet = new ServerPacket(obj.GetType().FullName, flag);
@@ -164,6 +168,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         }
 
         /// <summary>
+        /// CLIENT AND SERVER METHOD
         /// Transmit to all players, optionally including the sending player
         /// </summary>
         /// <param name="obj"></param>
@@ -171,7 +176,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
         public static void SendToAllPlayers(object obj, bool excludeSender, bool reliable = true)
         {
             //Validate(obj);
-            ServerPacket packet = new ServerPacket(obj.GetType().FullName, TransitType.ToAll | (excludeSender ? TransitType.ExcludeSender : 0));
+            ServerPacket packet = new ServerPacket(obj.GetType().FullName, (excludeSender ? TransitType.ExcludeSender : TransitType.ToAll));
             packet.Wrap(obj);
             MyAPIGateway.Multiplayer.SendMessageToServer(_commsId, MyAPIGateway.Utilities.SerializeToBinary(packet), reliable);
         }
@@ -200,6 +205,10 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
                     {
                         _registry[_table[packet.ID]]?.Invoke(packetIn);
                     }
+                } 
+                else if(packet.Flag.HasFlag(TransitType.ToServer))
+                {
+                    _registry[_table[packet.ID]]?.Invoke(packetIn);
                 }
 
                 if (MyAPIGateway.Multiplayer.IsServer && packet.Flag.HasFlag(TransitType.ToAll))
@@ -260,8 +269,9 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 
             foreach (var p in _tempPlayers.ToArray())
             {
-                if (p.IsBot || packet.Flag.HasFlag(TransitType.ExcludeSender) && p.SteamUserId == sender ||
-                    MyAPIGateway.Multiplayer.IsServer && MyAPIGateway.Session?.Player?.SteamUserId == sender)
+                if (p.IsBot || 
+                   (packet.Flag.HasFlag(TransitType.ExcludeSender) && p.SteamUserId == sender) ||
+                   (MyAPIGateway.Multiplayer.IsServer && MyAPIGateway.Session?.Player?.SteamUserId == sender))
                     continue;
 
                 ServerPacket send = new ServerPacket(packet.ID, TransitType.ToAll, true);

@@ -16,6 +16,7 @@ using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
+using VRageRender;
 using WelderWall.Data.Scripts.Math0424.WelderWall.Util;
 
 namespace WelderWall.Data.Scripts.Math0424.WelderWall
@@ -36,8 +37,25 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             _walls = new List<WelderWall>();
             _grid = grid;
             _grid.OnClose += Close;
+
+            _grid.OnGridSplit += VerifyAllWalls;
+            _grid.OnGridMerge += VerifyAllWalls;
+            
             Load();
         }
+
+        private void VerifyAllWalls(IMyCubeGrid newGrid, IMyCubeGrid deletedGrid)
+        {
+            if (deletedGrid == _grid)
+                return;
+
+            foreach(var x in new List<WelderWall>(_walls))
+                foreach(var b in x.Corners)
+                    if (b == null || (b != null && b.CubeGrid != newGrid))
+                        _walls.Remove(x);
+            Save();
+        }
+
 
         public void CheckWallFunctional(IMyCubeBlock block)
         {
@@ -70,13 +88,13 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 if (wall.Equals(dummyWall))
                 {
                     wall.Corners = dummyWall.Corners;
-                    wall.UpdateTerminalControls();
+                    wall.UpdateTerminalControls(null);
                     return;
                 }
 
             dummyWall.Owner = _grid.BigOwners[0];
             dummyWall.PowerInput = 100;
-            dummyWall.UpdateTerminalControls();
+            dummyWall.UpdateTerminalControls(null);
 
             _walls.Add(dummyWall);
             Save();
@@ -139,7 +157,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                     return true;
 
                 var bBlock = _grid.GetCubeBlock(bPos);
-                if (bBlock == null || bBlock.FatBlock == null || !bBlock.FatBlock.IsWorking)
+                if (bBlock == null || bBlock.FatBlock == null || !bBlock.FatBlock.IsFunctional)
                     return false;
 
                 if (bBlock.BlockDefinition.Id.SubtypeId == WelderManager.WelderCorner)
@@ -226,7 +244,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                     return;
 
                 wall.Blocks.Clear();
-                wall.UpdateTerminalControls();
                 if (!wall.IsFunctional())
                     continue;
 
@@ -301,9 +318,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 if (!wall.IsFunctional())
                     continue;
 
-                foreach (var x in wall.Blocks)
-                    x.DrawAABB(Color.Green);
-
                 IMyCubeBlock cubeBlock = wall.Corners[0];
                 IMyInventory cubeBlockInv = cubeBlock.GetInventory();
                 if (cubeBlockInv == null)
@@ -317,6 +331,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 {
                     case WelderState.Weld:
 
+                        float weldSpeed = efficiency * WelderManager.Config.GetFloat(ConfigOptions.Speed) * delta * 0.5f;
                         foreach (var block in wall.Blocks)
                         {
                             if (block.CubeGrid.Physics == null)
@@ -337,21 +352,17 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                             block.MoveItemsFromConstructionStockpile(cubeBlockInv, MyItemFlags.Damaged);
 
                             if (block.CanContinueBuild(cubeBlockInv))
-                            {
-                                float weldSpeed = efficiency * WelderManager.Config.GetFloat(ConfigOptions.Speed) * delta * 0.5f;
                                 block.IncreaseMountLevel(weldSpeed, wall.Owner, cubeBlockInv);
-                            }
                         }
                         break;
                     case WelderState.Grind:
-                        topLoop: foreach (var block in wall.Blocks)
+                        float grindSpeed = efficiency * WelderManager.Config.GetFloat(ConfigOptions.Speed) * delta;
+                        foreach (var block in wall.Blocks)
                         {
-                            float grindSpeed = efficiency * WelderManager.Config.GetFloat(ConfigOptions.Speed) * delta;
-
                             if (block.FatBlock != null && block.FatBlock.HasInventory)
                                 for (int i = 0; i < block.FatBlock.InventoryCount; i++)
                                     if (!SlowlyEmptyBlock(block.FatBlock.GetInventory(i), cubeBlock))
-                                        goto topLoop;
+                                        goto exitLoop;
 
                             if (!SlowlyEmptyBlock(cubeBlockInv, cubeBlock))
                                 continue;
@@ -361,6 +372,9 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
                             if (block.IsFullyDismounted)
                                 block.CubeGrid.RazeBlock(block.Min);
+                            
+                            exitLoop:
+                            continue;
                         }
                         break;
                 }
@@ -497,8 +511,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 return true;
             
             MyFixedPoint transferAmount;
-            if (_grid.ConveyorSystem.PushGenerateItem(item.Value.Type, item.Value.Amount, out transferAmount, sourceBlock, false))
-                inventory.RemoveItemsAt(0);
+            if (_grid.ConveyorSystem.PushGenerateItem(item.Value.Type, item.Value.Amount, out transferAmount, sourceBlock, true))
+                inventory.RemoveItems(item.Value.ItemId, transferAmount, true, false);
             return false;
         }
 

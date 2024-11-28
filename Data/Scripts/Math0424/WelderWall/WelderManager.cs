@@ -40,7 +40,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         private Dictionary<Enum, object> defaultConfig = new Dictionary<Enum, object>()
         {
             { ConfigOptions.Speed, 0.25f },
-            { ConfigOptions.MaxPower, 100000000f },
+            { ConfigOptions.MaxPower, 1000000000f },
             { ConfigOptions.MaxWallSize, 50 },
             { ConfigOptions.MaxActionsPerTick, 100 },
         };
@@ -54,16 +54,29 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         {
             EasyNetworker.Init(22345);
             Config = new EasyConfiguration(false, "WelderWallConfig.cfg", defaultConfig);
-
-            TerminalControls = new EasyTerminalControls<IMyRefinery>("WelderWallMod", WelderCorner)
-                .WithSeperator()
-                .WithOnOff("Action", "Weld or Grind", "Weld", "Grind", Terminal_UpdateWeldGrind)
-                .WithSlider("Power Input", SliderFormat, "Max Power Draw", 0, Config.GetFloat(ConfigOptions.MaxPower), Terminal_UpdatePower)
-                .WithSeperator();
         }
 
-        private void SliderFormat(IMyCubeBlock block, float value, StringBuilder sb)
+        public static void UpdateTerminalControls()
         {
+            if (TerminalControls != null)
+                return;
+
+            TerminalControls = new EasyTerminalControls<IMyRefinery>("WelderWallMod", WelderCorner)
+               .WithSeperator()
+               .WithOnOff("Enabled", "On or Off", "On", "Off", Terminal_UpdateEnabled)
+               .WithOnOff("Action", "Weld or Grind", "Weld", "Grind", Terminal_UpdateWeldGrind)
+               .WithSlider("Power Input", SliderFormat, "Max Power Draw", 0, Config.GetFloat(ConfigOptions.MaxPower), Terminal_UpdatePower)
+               .WithSeperator();
+        }
+
+        static void SliderFormat(IMyCubeBlock block, float value, StringBuilder sb)
+        {
+            if (value == 0)
+            {
+                sb.Append("Disabled");
+                return;
+            }
+            
             string unit;
             float adjustedValue;
 
@@ -91,43 +104,44 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             sb.Append($"{Math.Round(adjustedValue, 2)} {unit}");
         }
 
-        private void Terminal_UpdateEnabled(IMyCubeBlock container, bool value)
+        static void Terminal_UpdateEnabled(IMyCubeBlock block, bool value)
         {
-            if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
+            if (WelderGrids.ContainsKey(block.CubeGrid.EntityId))
             {
-                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWallByCorner(container);
+                WelderWall wall = WelderGrids[block.CubeGrid.EntityId].GetWallByCorner(block);
                 if (wall != null)
                 {
-                    wall.UpdateTerminalControls();
-                    WelderGrids[container.CubeGrid.EntityId].Save();
+                    wall.Enabled = value;
+                    wall.UpdateTerminalControls(block);
+                    WelderGrids[block.CubeGrid.EntityId].Save();
                 }
             }
         }
 
-        private void Terminal_UpdateWeldGrind(IMyCubeBlock container, bool value)
+        static void Terminal_UpdateWeldGrind(IMyCubeBlock block, bool value)
         {
-            if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
+            if (WelderGrids.ContainsKey(block.CubeGrid.EntityId))
             {
-                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWallByCorner(container);
+                WelderWall wall = WelderGrids[block.CubeGrid.EntityId].GetWallByCorner(block);
                 if (wall != null)
                 {
                     wall.State = value ? WelderState.Weld : WelderState.Grind;
-                    wall.UpdateTerminalControls();
-                    WelderGrids[container.CubeGrid.EntityId].Save();
+                    wall.UpdateTerminalControls(block);
+                    WelderGrids[block.CubeGrid.EntityId].Save();
                 }
             }
         }
 
-        private void Terminal_UpdatePower(IMyCubeBlock container, float value)
+        static void Terminal_UpdatePower(IMyCubeBlock block, float value)
         {
-            if (WelderGrids.ContainsKey(container.CubeGrid.EntityId))
+            if (WelderGrids.ContainsKey(block.CubeGrid.EntityId))
             {
-                WelderWall wall = WelderGrids[container.CubeGrid.EntityId].GetWallByCorner(container);
+                WelderWall wall = WelderGrids[block.CubeGrid.EntityId].GetWallByCorner(block);
                 if (wall != null)
                 {
                     wall.PowerInput = value;
-                    wall.UpdateTerminalControls();
-                    WelderGrids[container.CubeGrid.EntityId].Save();
+                    wall.UpdateTerminalControls(block);
+                    WelderGrids[block.CubeGrid.EntityId].Save();
                 }
             }
         }
@@ -191,6 +205,19 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             WelderGrids[block.CubeGrid.EntityId].CheckWallFunctional(block);
         }
 
+
+        public static bool IsWallWorking(IMyCubeBlock block)
+        {
+            if (!WelderGrids.ContainsKey(block.CubeGrid.EntityId))
+                return false;
+
+            WelderWall wall = WelderGrids[block.CubeGrid.EntityId].GetWallAny(block);
+            if (wall == null)
+                return false;
+            return wall.HasAllCorners() && wall.IsFunctional();
+        }
+
+
         int tick = 0;
         public override void UpdateBeforeSimulation()
         {
@@ -200,33 +227,41 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             if (tick++ % 3 == 0 || WelderGrids.Count == 0)
                 return;
 
-            int totalActionCount = 0;
-            List<WelderGrid> active = new List<WelderGrid>();
-            // assemble all blocks
-            foreach(var wall in WelderGrids.Values)
+            try
             {
-                wall.AssembleBlockList();
-                totalActionCount += wall.ActionsThisTick;
-                if (wall.ActionsThisTick != 0)
-                    active.Add(wall);
-            }
-
-            if (totalActionCount == 0)
-                return;
-
-            int razeActions = Math.Max(0, totalActionCount - Config.GetInt(ConfigOptions.MaxActionsPerTick));
-            if (razeActions != 0)
-            {
-                foreach (var grid in active)
+                int totalActionCount = 0;
+                List<WelderGrid> active = new List<WelderGrid>();
+                // assemble all blocks
+                foreach (var wall in WelderGrids.Values)
                 {
-                    float razePercent = grid.ActionsThisTick / (float)totalActionCount;
-                    grid.RazeActions((int)(razeActions * razePercent));
+                    wall.AssembleBlockList();
+                    totalActionCount += wall.ActionsThisTick;
+                    if (wall.ActionsThisTick != 0)
+                        active.Add(wall);
                 }
+
+                if (totalActionCount == 0)
+                    return;
+
+                int razeActions = Math.Max(0, totalActionCount - Config.GetInt(ConfigOptions.MaxActionsPerTick));
+                if (razeActions != 0)
+                {
+                    foreach (var grid in active)
+                    {
+                        float razePercent = grid.ActionsThisTick / (float)totalActionCount;
+                        grid.RazeActions((int)(razeActions * razePercent));
+                    }
+                }
+
+                // preform the actions on the blocks
+                foreach (var wall in active)
+                    wall.DispatchBlocks(3);
+            }
+            catch(Exception ex)
+            {
+                MyLog.Default.WriteLineAndConsole($"Error with WelderWall\n{ex.Message}\n{ex.StackTrace}");
             }
 
-            // preform the actions on the blocks
-            foreach (var wall in active)
-                wall.DispatchBlocks(3);
         }
 
         public override void Draw()

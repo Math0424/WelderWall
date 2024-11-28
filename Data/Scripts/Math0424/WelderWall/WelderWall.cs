@@ -29,18 +29,19 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         [ProtoMember(6)] public WelderState State;
         [ProtoMember(7)] public float PowerInput;
+        [ProtoMember(8)] public bool Enabled;
 
         [ProtoMember(9)] public long Owner;
 
         public List<IMySlimBlock> Blocks;
         public IMyCubeBlock[] Corners;
 
-        public void UpdateTerminalControls()
+        public void UpdateTerminalControls(IMyCubeBlock ignore)
         {
-            foreach(var block in Corners)
-                if (block != null)
+            foreach (var block in Corners)
+                if (block != null && block != ignore)
                 {
-                    WelderManager.TerminalControls.SetValues(block, State == WelderState.Weld, PowerInput);
+                    WelderManager.TerminalControls.SetValues(block, Enabled, State == WelderState.Weld, PowerInput);
                     WelderManager.TerminalControls.SetAllEnabled(block, true);
                 }
         }
@@ -160,10 +161,10 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         /// <returns></returns>
         public bool IsFunctional()
         {
-            if (PowerInput == 0 || !HasAllCorners())
+            if (!Enabled || PowerInput == 0 || !HasAllCorners())
                 return false;
             foreach (var block in Corners)
-                if (!block.IsWorking || block.ResourceSink.SuppliedRatioByType(MyResourceDistributorComponent.ElectricityId) != 1)
+                if (block == null || !block.IsWorking || block.ResourceSink.SuppliedRatioByType(MyResourceDistributorComponent.ElectricityId) != 1)
                     return false;
             return true;
         }

@@ -4,6 +4,7 @@ using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
+using VRageMath;
 
 namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
 {
@@ -14,7 +15,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
             _block = (IMyCubeBlock)Entity;
-            NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME | MyEntityUpdateEnum.EACH_100TH_FRAME;
         }
 
         public override void UpdateOnceBeforeFrame()
@@ -24,14 +25,41 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
 
             _block.IsWorkingChanged += CheckFunctional;
             _block.OnClose += Removed;
+
+            UpdateEmissives();
+            if (_block.IsWorking)
+                WelderManager.CheckWallConnected(_block);
         }
 
         public void CheckFunctional(IMyCubeBlock block)
         {
+            UpdateEmissives();
             if (!_block.IsWorking)
                 WelderManager.SetWallDisabled(_block);
             else
                 WelderManager.CheckWallConnected(_block);
+        }
+
+        public override void UpdateAfterSimulation100()
+        {
+            UpdateEmissives();
+        }
+
+        private void UpdateEmissives()
+        {
+            if (!_block.IsFunctional)
+            {
+                _block.SetEmissiveParts("Emissive0", Color.Red, 1f);
+                return;
+            }
+
+            if (!_block.IsWorking || !WelderManager.IsWallWorking(_block))
+            {
+                _block.SetEmissiveParts("Emissive0", Color.Yellow, 1f);
+                return;
+            }
+            
+            _block.SetEmissiveParts("Emissive0", Color.Green, 1f);
         }
 
         private void Removed(IMyEntity ent)

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using VRage.Game.ModAPI;
+using VRage.Utils;
 using VRageMath;
 
 namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
@@ -109,7 +110,10 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
 
                     string key = split[0].Trim();
                     if (_defaultConfig.ContainsKey(key))
+                    {
+
                         _defaultConfig[key] = Cast(_defaultConfig[key].GetType(), string.Join("", split.Skip(1)));
+                    }
                 }
 
             }

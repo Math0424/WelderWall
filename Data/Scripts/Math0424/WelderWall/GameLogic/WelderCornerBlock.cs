@@ -27,12 +27,15 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            _block = (IMyRefinery)Entity; 
+            _block = (IMyRefinery)Entity;
             NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
         public override void UpdateOnceBeforeFrame()
         {
+            WelderManager.UpdateTerminalControls();
+            NeedsUpdate = MyEntityUpdateEnum.NONE;
+
             if (_block.CubeGrid.Physics == null || ((MyCubeGrid)_block.CubeGrid).IsPreview)
                 return;
 
@@ -46,6 +49,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
                 ((MyInventory)_block.GetInventory(i)).Constraint = null;
                 ((MyInventory)_block.GetInventory(i)).SetFlags(MyInventoryFlags.CanSend);
             }
+
             _block.IsWorkingChanged += CheckFunctional;
             _block.OnClose += Removed;
 
