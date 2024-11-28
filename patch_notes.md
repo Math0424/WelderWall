@@ -1,1 +1,1 @@
-[+] Upload mod 
+[+] Release mod

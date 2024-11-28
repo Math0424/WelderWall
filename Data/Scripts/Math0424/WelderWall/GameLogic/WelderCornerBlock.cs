@@ -46,7 +46,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
 
             for (int i = 0; i < _block.InventoryCount; i++)
             {
-                ((MyInventory)_block.GetInventory(i)).Constraint = null;
+                ((MyInventory)_block.GetInventory(i)).Constraint = new MyInventoryConstraint("Empty constraint", null, false);
                 ((MyInventory)_block.GetInventory(i)).SetFlags(MyInventoryFlags.CanSend);
             }
 

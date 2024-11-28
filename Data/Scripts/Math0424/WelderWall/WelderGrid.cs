@@ -1,4 +1,6 @@
-﻿using Sandbox.Definitions;
+﻿using ParallelTasks;
+using Sandbox.Definitions;
+using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.GameSystems.Conveyors;
@@ -307,6 +309,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             }
         }
 
+        private Dictionary<string, int> missingComponents = new Dictionary<string, int>();
         public void DispatchBlocks(int delta)
         {
             float maxDraw = WelderManager.Config.GetFloat(ConfigOptions.MaxPower);
@@ -319,8 +322,9 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                     continue;
 
                 IMyCubeBlock cubeBlock = wall.Corners[0];
-                IMyInventory cubeBlockInv = cubeBlock.GetInventory();
-                if (cubeBlockInv == null)
+                IMyInventory cubeBlockPushInv = cubeBlock.GetInventory(0);
+                IMyInventory cubeBlockPullInv = cubeBlock.GetInventory(1);
+                if (cubeBlockPushInv == null || cubeBlockPullInv == null)
                     return;
 
                 float efficiency = (float)Math.Sin(wall.PowerInput / maxDraw * Math.PI / 2);
@@ -331,16 +335,17 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                 {
                     case WelderState.Weld:
 
-                        float weldSpeed = efficiency * WelderManager.Config.GetFloat(ConfigOptions.Speed) * delta * 0.5f;
+                        float weldSpeed = efficiency * WelderManager.Config.GetFloat(ConfigOptions.Speed) * delta * 0.4f;
                         foreach (var block in wall.Blocks)
                         {
                             if (block.CubeGrid.Physics == null)
                             {
                                 var coreItem = ((MyCubeBlockDefinition)block.BlockDefinition).Components[0].Definition.Id;
-                                if (cubeBlockInv.ContainItems(1, coreItem))
-                                    cubeBlockInv.RemoveItemsOfType(1, coreItem);
-                                else if(_grid.ConveyorSystem.PullItem(coreItem, 1, cubeBlock, cubeBlockInv, true).RawValue == 0)
+                                if (((MyInventory)cubeBlockPullInv).RemoveItemsOfType(1, coreItem).RawValue == 0 &&
+                                    _grid.ConveyorSystem.PullItem(coreItem, 1, cubeBlock, cubeBlockPullInv, true).RawValue == 0)
+                                {
                                     continue;
+                                }
                                 ((IMyProjector)((MyCubeGrid)block.CubeGrid).Projector).Build(block, wall.Owner, cubeBlock.EntityId, false);
                                 continue;
                             }
@@ -348,11 +353,21 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                             if (block.IsFullIntegrity && !block.HasDeformation)
                                 continue;
 
-                            block.MoveItemsToConstructionStockpile(cubeBlockInv);
-                            block.MoveItemsFromConstructionStockpile(cubeBlockInv, MyItemFlags.Damaged);
+                            if (block.CanContinueBuild(cubeBlockPullInv))
+                                block.IncreaseMountLevel(weldSpeed, wall.Owner, cubeBlockPullInv);
 
-                            if (block.CanContinueBuild(cubeBlockInv))
-                                block.IncreaseMountLevel(weldSpeed, wall.Owner, cubeBlockInv);
+                            block.MoveItemsToConstructionStockpile(cubeBlockPullInv);
+                            block.MoveItemsFromConstructionStockpile(cubeBlockPullInv, MyItemFlags.Damaged);
+
+                            missingComponents.Clear();
+                            block.GetMissingComponents(missingComponents);
+                            foreach (KeyValuePair<string, int> keyValuePair in missingComponents)
+                            {
+                                MyDefinitionId myDefinitionId = new MyDefinitionId(typeof(MyObjectBuilder_Component), keyValuePair.Key);
+                                if (Math.Max(keyValuePair.Value - cubeBlockPullInv.GetItemAmount(myDefinitionId).RawValue, 0) != 0)
+                                    _grid.ConveyorSystem.PullItem(myDefinitionId, keyValuePair.Value, cubeBlock, cubeBlockPullInv, false);
+                            }
+
                         }
                         break;
                     case WelderState.Grind:
@@ -364,11 +379,11 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                                     if (!SlowlyEmptyBlock(block.FatBlock.GetInventory(i), cubeBlock))
                                         goto exitLoop;
 
-                            if (!SlowlyEmptyBlock(cubeBlockInv, cubeBlock))
+                            if (!SlowlyEmptyBlock(cubeBlockPushInv, cubeBlock))
                                 continue;
 
-                            block.DecreaseMountLevel(grindSpeed, cubeBlockInv, true);
-                            block.MoveItemsFromConstructionStockpile(cubeBlockInv);
+                            block.DecreaseMountLevel(grindSpeed, cubeBlockPushInv, true);
+                            block.MoveItemsFromConstructionStockpile(cubeBlockPushInv);
 
                             if (block.IsFullyDismounted)
                                 block.CubeGrid.RazeBlock(block.Min);
