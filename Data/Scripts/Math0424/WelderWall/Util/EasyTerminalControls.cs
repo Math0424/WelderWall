@@ -269,6 +269,10 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
                 TerminalData[request.EntityId][update.TerminalId] = update;
                 if (ent != null && ent is IMyCubeBlock)
                 {
+                    // goofy ahhh hack, find a better spot?
+                    // maybe parse MyEntities.Add or somethin
+                    ent.OnClose -= RemoveOnClose;
+                    ent.OnClose += RemoveOnClose;
                     switch (update.Type)
                     {
                         case TerminalType.Slider:
@@ -313,8 +317,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             if (b.BlockDefinition.SubtypeId == _subtypeId)
             {
                 PopulateData(b.EntityId, _fullName);
-                b.OnClose -= RemoveOnClose;
-                b.OnClose += RemoveOnClose;
                 return true;
             }
             return false;
@@ -329,7 +331,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             return true;
         }
 
-        private void RemoveOnClose(IMyEntity ent)
+        private static void RemoveOnClose(IMyEntity ent)
         {
             TerminalData.Remove(ent.EntityId);
         }

@@ -1,4 +1,4 @@
-[h1] WelderWall [/h1]
+[h1] Anyways, here's WelderWall [/h1]
 
 Welder wall is a replacement to-- walls of welders and grinders
 

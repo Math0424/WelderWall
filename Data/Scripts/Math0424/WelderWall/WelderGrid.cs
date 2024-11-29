@@ -340,11 +340,14 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                         {
                             if (block.CubeGrid.Physics == null)
                             {
-                                var coreItem = ((MyCubeBlockDefinition)block.BlockDefinition).Components[0].Definition.Id;
-                                if (((MyInventory)cubeBlockPullInv).RemoveItemsOfType(1, coreItem).RawValue == 0 &&
-                                    _grid.ConveyorSystem.PullItem(coreItem, 1, cubeBlock, cubeBlockPullInv, true).RawValue == 0)
+                                if (!MyAPIGateway.Session.CreativeMode)
                                 {
-                                    continue;
+                                    var coreItem = ((MyCubeBlockDefinition)block.BlockDefinition).Components[0].Definition.Id;
+                                    if (((MyInventory)cubeBlockPullInv).RemoveItemsOfType(1, coreItem).RawValue == 0 &&
+                                        _grid.ConveyorSystem.PullItem(coreItem, 1, cubeBlock, cubeBlockPullInv, true).RawValue == 0)
+                                    {
+                                        continue;
+                                    }
                                 }
                                 ((IMyProjector)((MyCubeGrid)block.CubeGrid).Projector).Build(block, wall.Owner, cubeBlock.EntityId, false);
                                 continue;
