@@ -15,6 +15,13 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         Weld,
     }
 
+    enum FunctionalState
+    {
+        Ok,
+        NotEnoughPower,
+        Disabled,
+    }
+
     /// <summary>
     /// Mostly a data storage but has instanced variables. really not good design. fix it later.
     /// </summary>
@@ -30,8 +37,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         [ProtoMember(6)] public WelderState State;
         [ProtoMember(7)] public float PowerInput;
         [ProtoMember(8)] public bool Enabled;
-
-        [ProtoMember(9)] public long Owner;
 
         public List<IMySlimBlock> Blocks;
         public IMyCubeBlock[] Corners;
@@ -116,6 +121,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
         public float RequiredPower()
         {
+            if (GetFunctional() == FunctionalState.Disabled)
+                return 0;
             return PowerInput / 4;
         }
 
@@ -159,14 +166,18 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         /// Should we function
         /// </summary>
         /// <returns></returns>
-        public bool IsFunctional()
+        public FunctionalState GetFunctional()
         {
             if (!Enabled || PowerInput == 0 || !HasAllCorners())
-                return false;
+                return FunctionalState.Disabled;
             foreach (var block in Corners)
-                if (block == null || !block.IsWorking || block.ResourceSink.SuppliedRatioByType(MyResourceDistributorComponent.ElectricityId) != 1)
-                    return false;
-            return true;
+            {
+                if (block == null || !block.IsFunctional || !((IMyFunctionalBlock)block).Enabled)
+                    return FunctionalState.Disabled;
+                else if(block.ResourceSink.SuppliedRatioByType(MyResourceDistributorComponent.ElectricityId) != 1)
+                    return FunctionalState.NotEnoughPower;
+            }
+            return FunctionalState.Ok;
         }
 
         /// <summary>

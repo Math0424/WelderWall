@@ -55,6 +55,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.GameLogic
 
             WelderManager.TerminalControls.SetAllEnabled(_block, false);
             WelderManager.AddCorner(_block);
+
+            EasyTerminalControls<IMyRefinery>.RequestUpdate(_block);
         }
 
         public void CheckFunctional(IMyCubeBlock block)

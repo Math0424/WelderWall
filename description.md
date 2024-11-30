@@ -7,9 +7,10 @@ Featuring customizable settings for speed, power, and size it allows admins to a
 Far faster and more efficient than vanilla welder walls, it allows for cusomization of how much CPU it can take up
 
 
+If you have any issues or suggestions please join the discord
 
 
-
+If you have any issues or suggestions please report them to the discord
 [b][h1][url=https://discord.gg/qpS5MarhYu]Discord[/url][/h1][/b]
 [quote]
 No- you cannot reupload this

@@ -214,7 +214,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
             WelderWall wall = WelderGrids[block.CubeGrid.EntityId].GetWallAny(block);
             if (wall == null)
                 return false;
-            return wall.HasAllCorners() && wall.IsFunctional();
+            return wall.HasAllCorners() && wall.GetFunctional() == FunctionalState.Ok;
         }
 
 

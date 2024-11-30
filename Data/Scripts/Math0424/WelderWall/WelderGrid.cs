@@ -94,7 +94,6 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                     return;
                 }
 
-            dummyWall.Owner = _grid.BigOwners[0];
             dummyWall.PowerInput = 100;
             dummyWall.UpdateTerminalControls(null);
 
@@ -188,7 +187,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
         {
             foreach(var wall in _walls)
             {
-                if (!wall.IsFunctional())
+                if (wall.GetFunctional() != FunctionalState.Ok)
                     continue;
 
                 Vector3D worldCenter = Vector3D.Transform(((Vector3D)(wall.TR.Value + wall.BL.Value)) / 2 * _grid.GridSize, _grid.WorldMatrix);
@@ -246,7 +245,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                     return;
 
                 wall.Blocks.Clear();
-                if (!wall.IsFunctional())
+                if (wall.GetFunctional() != FunctionalState.Ok)
                     continue;
 
                 Vector3D worldCenter = Vector3D.Transform(((Vector3D)(wall.TR.Value + wall.BL.Value)) / 2 * _grid.GridSize, _grid.WorldMatrix);
@@ -318,7 +317,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
 
             foreach (var wall in _walls)
             {
-                if (!wall.IsFunctional())
+                if (wall.GetFunctional() != FunctionalState.Ok)
                     continue;
 
                 IMyCubeBlock cubeBlock = wall.Corners[0];
@@ -349,7 +348,8 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                                         continue;
                                     }
                                 }
-                                ((IMyProjector)((MyCubeGrid)block.CubeGrid).Projector).Build(block, wall.Owner, cubeBlock.EntityId, false);
+                                var projectorOwner = ((IMyProjector)((MyCubeGrid)block.CubeGrid).Projector).OwnerId;
+                                ((IMyProjector)((MyCubeGrid)block.CubeGrid).Projector).Build(block, projectorOwner, cubeBlock.EntityId, false);
                                 continue;
                             }
 
@@ -357,7 +357,7 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall
                                 continue;
 
                             if (block.CanContinueBuild(cubeBlockPullInv))
-                                block.IncreaseMountLevel(weldSpeed, wall.Owner, cubeBlockPullInv);
+                                block.IncreaseMountLevel(weldSpeed, block.OwnerId, cubeBlockPullInv);
 
                             block.MoveItemsToConstructionStockpile(cubeBlockPullInv);
                             block.MoveItemsFromConstructionStockpile(cubeBlockPullInv, MyItemFlags.Damaged);

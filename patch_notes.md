@@ -1,1 +1,1 @@
-[+] Release mod
+[+] Fixed sync in MP servers when loading a grid

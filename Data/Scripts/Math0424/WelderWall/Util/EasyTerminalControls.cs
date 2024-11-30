@@ -233,6 +233,16 @@ namespace WelderWall.Data.Scripts.Math0424.WelderWall.Util
             MyAPIGateway.TerminalControls.CustomControlGetter += RequestUpdate;
         }
 
+        /// <summary>
+        /// Request a sync from the server, should be called when block loads
+        /// </summary>
+        /// <param name="block"></param>
+        public static void RequestUpdate(IMyCubeBlock block)
+        {
+            if (block is IMyTerminalBlock)
+                RequestUpdate(block as IMyTerminalBlock, null);
+        }
+
         private static void RequestUpdate(IMyTerminalBlock block, List<IMyTerminalControl> controls)
         {
             string subtype = block.BlockDefinition.SubtypeName;
